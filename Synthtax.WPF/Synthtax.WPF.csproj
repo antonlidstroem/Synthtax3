@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Synthtax.WPF</RootNamespace>
     <AssemblyName>Synthtax.WPF</AssemblyName>
-    <ApplicationIcon>Resources\synthtax.ico</ApplicationIcon>
+    <!--<ApplicationIcon>Resources\synthtax.ico</ApplicationIcon>-->
     <StartupObject>Synthtax.WPF.App</StartupObject>
   </PropertyGroup>
 

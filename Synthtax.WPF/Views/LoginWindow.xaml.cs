@@ -18,7 +18,11 @@ public partial class LoginWindow : Window
         DataContext = vm;
 
         // Wire PasswordBox manually (can't bind SecureString in WPF easily)
-        PasswordBox.PasswordChanged += (_, _) => vm.Password = PasswordBox.Password;
+        PasswordBox.PasswordChanged += (_, _) =>
+        {
+            vm.Password = PasswordBox.Password;
+            vm.LoginCommand.NotifyCanExecuteChanged(); // Körs varje gång lösenord ändras
+        };
 
         // Enter key on username focuses password
         UsernameBox.KeyDown += (_, e) =>

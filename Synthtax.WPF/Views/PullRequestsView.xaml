@@ -44,7 +44,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Grid>
+
             <Border Grid.Column="0" Style="{StaticResource StatCard}" Margin="0,0,8,0">
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionHeader}" Text="ÖPPNA"/>
@@ -52,16 +52,14 @@
                                Foreground="{StaticResource AccentBrush}"/>
                 </StackPanel>
             </Border>
-            </Grid>
-            <Grid>
-                <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="SAMMANSLAGNA"/>
-                        <TextBlock Text="{Binding MergedCount}" FontSize="28" FontWeight="Bold" Foreground="#1DB36B"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-            <Grid>
+
+            <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="SAMMANSLAGNA"/>
+                    <TextBlock Text="{Binding MergedCount}" FontSize="28" FontWeight="Bold" Foreground="#1DB36B"/>
+                </StackPanel>
+            </Border>
+
             <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0,0,16,0">
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionHeader}" Text="STÄNGDA"/>
@@ -69,15 +67,13 @@
                                Foreground="{StaticResource TextMutedBrush}"/>
                 </StackPanel>
             </Border>
-            </Grid>
 
             <!-- Filter panel -->
-            <Grid>
             <Border Grid.Column="3" Style="{StaticResource Card}" Padding="14,12" MinWidth="220">
-                <ctrls:SpacedStackPanel >
+                <ctrls:SpacedStackPanel>
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Sök titel, författare..." FontSize="12"/>
-                    <ctrls:SpacedStackPanel Orientation="Horizontal" >
+                    <ctrls:SpacedStackPanel Orientation="Horizontal">
                         <CheckBox Content="Öppna"    IsChecked="{Binding ShowOpen}"/>
                         <CheckBox Content="Merged"   IsChecked="{Binding ShowMerged}"/>
                         <CheckBox Content="Stängda"  IsChecked="{Binding ShowClosed}"/>
@@ -86,7 +82,6 @@
                             Height="28" Padding="10,0" Command="{Binding ClearFiltersCommand}"/>
                 </ctrls:SpacedStackPanel>
             </Border>
-            </Grid>
         </Grid>
 
         <!-- PR list + detail -->
@@ -167,15 +162,9 @@
 
             <!-- PR detail panel -->
             <Border Grid.Column="2" Style="{StaticResource Card}">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                            Visibility="{Binding SelectedPr, Converter={StaticResource NullToVisibility}}">
-                    <TextBlock Text="Välj en PR" Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="13" TextAlignment="Center"/>
-                </StackPanel>
-
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Visibility="{Binding SelectedPr, Converter={StaticResource NullToVisibility}, ConverterParameter=inverse}">
-                    <ctrls:SpacedStackPanel DataContext="{Binding SelectedPr}" >
+                <!-- PR details -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ctrls:SpacedStackPanel DataContext="{Binding SelectedPr}">
 
                         <!-- PR title + ID -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -213,7 +202,7 @@
 
                         <!-- Branch flow -->
                         <TextBlock Style="{StaticResource SectionHeader}" Text="BRANCH"/>
-                        <ctrls:SpacedStackPanel Orientation="Horizontal" Margin="0,4,0,16" >
+                        <ctrls:SpacedStackPanel Orientation="Horizontal" Margin="0,4,0,16">
                             <Border Background="#F0F5FF" CornerRadius="4" Padding="8,4">
                                 <TextBlock Text="{Binding SourceBranch}"
                                            FontFamily="Cascadia Code, Consolas"

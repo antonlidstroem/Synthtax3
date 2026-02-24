@@ -47,7 +47,7 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // ── Logging ───────────────────────────────────────────────────────
-        services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Information));
+        //services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Information));
 
         // ── Core singletons ───────────────────────────────────────────────
         services.AddSingleton<TokenStore>();

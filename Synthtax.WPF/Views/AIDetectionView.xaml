@@ -29,7 +29,7 @@
                 <ctrls:HintTextBox Grid.Column="0"
                          Text="{Binding SolutionPath, UpdateSourceTrigger=PropertyChanged}"
                          Margin="0,0,10,0"
-                           Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
+                         Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
                 <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
                         Content="Bläddra..." Margin="0,0,8,0"
                         Command="{Binding BrowseCommand}"/>
@@ -79,7 +79,7 @@
 
             <!-- Filter controls -->
             <Border Grid.Column="3" Style="{StaticResource Card}" Padding="14,12" MinWidth="200">
-                <ctrls:SpacedStackPanel >
+                <ctrls:SpacedStackPanel>
                     <TextBlock Style="{StaticResource SectionHeader}" Text="FILTER"/>
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Sök fil..." FontSize="12"/>
@@ -168,22 +168,14 @@
 
             <!-- Signals panel -->
             <Border Grid.Column="2" Style="{StaticResource Card}">
-                <!-- No selection -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                            Visibility="{Binding SelectedFile, Converter={StaticResource NullToVisibility}}">
-                    <TextBlock Text="Välj en fil för att se detaljerade signaler."
-                               Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="13" TextAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
-
-                <!-- Signals detail -->
+                <!-- Selection exists - show details -->
                 <Grid Visibility="{Binding SelectedFile, Converter={StaticResource NullToVisibility}, ConverterParameter=inverse}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- File header -->
+                    <!-- File header with score -->
                     <StackPanel Grid.Row="0" Margin="0,0,0,16">
                         <TextBlock Text="{Binding SelectedFile.FileName}"
                                    FontSize="14" FontWeight="SemiBold"
@@ -216,13 +208,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Margin="0,0,0,8" CornerRadius="8" Padding="12,10"
-                                            BorderThickness="1">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background"   Value="#F8F9FC"/>
-                                                <Setter Property="BorderBrush"  Value="#E8EAEF"/>
-                                            </Style>
-                                        </Border.Style>
+                                            BorderThickness="1" Background="#F8F9FC" BorderBrush="#E8EAEF">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto"/>

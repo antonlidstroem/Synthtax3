@@ -29,7 +29,7 @@
                 <ctrls:HintTextBox Grid.Column="0"
                          Text="{Binding SolutionPath, UpdateSourceTrigger=PropertyChanged}"
                          Margin="0,0,10,0" ToolTip="Sökväg till .sln-fil"
-                           Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
+                         Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
                 <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
                         Content="Bläddra..." Margin="0,0,8,0"
                         Command="{Binding BrowseCommand}"/>
@@ -95,7 +95,7 @@
                                 Content="Rensa" Height="30" Padding="10,0"
                                 Command="{Binding ClearFiltersCommand}"/>
                     </ctrls:SpacedStackPanel>
-                    <ctrls:SpacedStackPanel Grid.Row="1" Orientation="Horizontal" >
+                    <ctrls:SpacedStackPanel Grid.Row="1" Orientation="Horizontal">
                         <CheckBox Content="Bara publika"  IsChecked="{Binding ShowOnlyPublic}"/>
                         <CheckBox Content="Bara async"    IsChecked="{Binding ShowOnlyAsync}"/>
                         <CheckBox Content="Bara statiska" IsChecked="{Binding ShowOnlyStatic}"/>
@@ -115,7 +115,6 @@
 
             <!-- Methods grid -->
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
-                <!-- Empty state -->
                 <Grid>
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                 Visibility="{Binding HasData, Converter={StaticResource InverseBoolToVisibility}}">
@@ -185,17 +184,9 @@
 
             <!-- Detail panel -->
             <Border Grid.Column="2" Style="{StaticResource Card}">
-                <!-- No selection -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                            Visibility="{Binding SelectedMethod, Converter={StaticResource NullToVisibility}}">
-                    <TextBlock Text="Välj en metod" Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="13" TextAlignment="Center"/>
-                </StackPanel>
-
                 <!-- Method details -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Visibility="{Binding SelectedMethod, Converter={StaticResource NullToVisibility}, ConverterParameter=inverse}">
-                    <StackPanel DataContext="{Binding SelectedMethod}" Margin="4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ctrls:SpacedStackPanel DataContext="{Binding SelectedMethod}">
 
                         <!-- Method name + badges -->
                         <TextBlock Text="{Binding MethodName}"
@@ -305,7 +296,7 @@
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding FilePath}"/>
-                    </StackPanel>
+                    </ctrls:SpacedStackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>
