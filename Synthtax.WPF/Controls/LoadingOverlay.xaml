@@ -1,0 +1,40 @@
+<UserControl x:Class="Synthtax.WPF.Controls.LoadingOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="#80FFFFFF" CornerRadius="8"
+            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+
+            <!-- Animated spinner using RotateTransform -->
+            <Grid Width="40" Height="40" Margin="0,0,0,12">
+                <Ellipse Stroke="{StaticResource SurfaceAltBrush}"
+                         StrokeThickness="4" Width="36" Height="36"/>
+                <Ellipse Stroke="{StaticResource AccentBrush}"
+                         StrokeThickness="4" Width="36" Height="36"
+                         StrokeDashArray="6 18" StrokeDashOffset="0">
+                    <Ellipse.RenderTransform>
+                        <RotateTransform x:Name="SpinnerRotate" CenterX="18" CenterY="18"/>
+                    </Ellipse.RenderTransform>
+                    <Ellipse.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation
+                                        Storyboard.TargetName="SpinnerRotate"
+                                        Storyboard.TargetProperty="Angle"
+                                        From="0" To="360"
+                                        Duration="0:0:1"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Ellipse.Triggers>
+                </Ellipse>
+            </Grid>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="13"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Border>
+</UserControl>

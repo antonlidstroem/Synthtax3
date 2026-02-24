@@ -1,0 +1,308 @@
+<UserControl x:Class="Synthtax.WPF.Views.StructureAnalysisView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Synthtax.WPF.ViewModels"
+             xmlns:ctrls="clr-namespace:Synthtax.WPF.Controls"
+             Background="{StaticResource SurfaceBrush}">
+
+    
+    <Grid Margin="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Style="{StaticResource PageTitle}" Text="Strukturanalys"/>
+            <TextBlock Text="Utforska solution-struktur som ett träd: solution → projekt → namespace → klass → metod."
+                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13"/>
+        </StackPanel>
+
+        <!-- Path + controls -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ctrls:HintTextBox Grid.Column="0"
+                         Text="{Binding SolutionPath, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,10,0" ToolTip="Sökväg till .sln-fil"
+                           Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
+                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                        Content="Bläddra..." Margin="0,0,8,0"
+                        Command="{Binding BrowseCommand}"/>
+                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}"
+                        Content="Analysera" MinWidth="110"
+                        Command="{Binding AnalyzeCommand}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}"/>
+            </Grid>
+        </Border>
+
+        <!-- Stats + filters -->
+        <Grid Grid.Row="2" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="PROJEKT"/>
+                    <TextBlock Text="{Binding TotalProjects}"
+                               FontSize="28" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="KLASSER"/>
+                    <TextBlock Text="{Binding TotalClasses}"
+                               FontSize="28" FontWeight="Bold" Foreground="#3B7DD8"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="METODER"/>
+                    <TextBlock Text="{Binding TotalMethods}"
+                               FontSize="28" FontWeight="Bold" Foreground="#8B5CF6"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="3" Style="{StaticResource StatCard}" Margin="0,0,16,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="INTERFACES"/>
+                    <TextBlock Text="{Binding TotalInterfaces}"
+                               FontSize="28" FontWeight="Bold" Foreground="#1DB36B"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Filters panel -->
+            <Border Grid.Column="4" Style="{StaticResource Card}" Padding="14,12">
+                <ctrls:SpacedStackPanel >
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="VISA"/>
+                    <CheckBox Content="Metoder"     IsChecked="{Binding ShowMethods}"/>
+                    <CheckBox Content="Egenskaper"  IsChecked="{Binding ShowProperties}"/>
+                    <CheckBox Content="Fält"        IsChecked="{Binding ShowFields}"/>
+                    <Separator Margin="0,4"/>
+                    <Button Style="{StaticResource SecondaryButton}"
+                            Content="Expandera" Padding="8,4" Height="26" FontSize="11"
+                            Command="{Binding ExpandAllCommand}"/>
+                    <Button Style="{StaticResource SecondaryButton}"
+                            Content="Minimera" Padding="8,4" Height="26" FontSize="11"
+                            Command="{Binding CollapseAllCommand}"/>
+                </ctrls:SpacedStackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Main content: TreeView + detail panel -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="0.55*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="0.45*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Tree -->
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Search bar inside tree card -->
+                    <Border Grid.Row="0" BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1" Padding="12,8">
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Filtrera efter namn..." FontSize="12"/>
+                    </Border>
+
+                    <!-- Empty state -->
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                Visibility="{Binding HasData, Converter={StaticResource InverseBoolToVisibility}}">
+                        <TextBlock Text="🏗" FontSize="48" HorizontalAlignment="Center"
+                                   Opacity="0.25" Margin="0,0,0,12"/>
+                        <TextBlock Text="Inga data – ange en sökväg och kör analys"
+                                   Foreground="{StaticResource TextMutedBrush}" FontSize="13"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Loading -->
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Analyserar struktur..." FontSize="13"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Tree view -->
+                    <TreeView Grid.Row="1"
+                              ItemsSource="{Binding TreeNodes}"
+                              SelectedItemChanged="OnTreeSelectedItemChanged"
+                              Background="White" BorderThickness="0"
+                              Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}">
+                        <TreeView.Resources>
+                            <HierarchicalDataTemplate DataType="{x:Type vm:StructureTreeNode}"
+                                                      ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Margin="0,2">
+                                    <TextBlock Text="{Binding Icon}"
+                                               FontSize="13" Width="22"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="12" Margin="2,0,0,0"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{Binding TypeColour}"/>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Modifier}"
+                                               FontSize="10" Margin="6,0,0,0"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.Resources>
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                <Setter Property="FontFamily" Value="Segoe UI"/>
+                                <Setter Property="Padding" Value="2,2"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </Grid>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                          Background="Transparent" Cursor="SizeWE"/>
+
+            <!-- Detail panel -->
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <StackPanel Visibility="{Binding SelectedNode, Converter={StaticResource NullToVisibility}, ConverterParameter=inverse}">
+                    <!-- No selection state -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding SelectedNode, Converter={StaticResource NullToVisibility}}">
+                        <TextBlock Text="Välj en nod i trädet för att se detaljer."
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="13" TextAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Detail when selected -->
+                    <ctrls:SpacedStackPanel DataContext="{Binding SelectedNode}" >
+                        <!-- Node type badge -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="{Binding Icon}" FontSize="24" Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding NodeType}" FontSize="11"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Separator Margin="0,0,0,16"/>
+
+                        <!-- Attributes grid -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Modifier"
+                                       Style="{StaticResource SectionHeader}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Modifier}"
+                                       FontFamily="Cascadia Code, Consolas" FontSize="12"
+                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Return type"
+                                       Style="{StaticResource SectionHeader}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ReturnType}"
+                                       FontFamily="Cascadia Code, Consolas" FontSize="12"
+                                       Foreground="#8B5CF6" Margin="0,0,0,10"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Rad"
+                                       Style="{StaticResource SectionHeader}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LineNumber}"
+                                       FontSize="12" Margin="0,0,0,10"/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Abstrakt"
+                                       Style="{StaticResource SectionHeader}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" FontSize="12" Margin="0,0,0,10">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="Nej"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAbstract}" Value="True">
+                                                <Setter Property="Text"       Value="Ja"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Statisk"
+                                       Style="{StaticResource SectionHeader}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" FontSize="12" Margin="0,0,0,10">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="Nej"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsStatic}" Value="True">
+                                                <Setter Property="Text"       Value="Ja"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Fil"
+                                       Style="{StaticResource SectionHeader}"/>
+                            <TextBlock Grid.Row="5" Grid.Column="1"
+                                       Text="{Binding FilePath}" FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding FilePath}"/>
+                        </Grid>
+
+                        <!-- Children summary -->
+                        <Border Margin="0,20,0,0" Background="{StaticResource SurfaceAltBrush}"
+                                CornerRadius="6" Padding="12,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="UNDERNODER"
+                                           Margin="0,0,0,6"/>
+                                <TextBlock FontSize="22" FontWeight="Bold"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           Text="{Binding Children.Count}"/>
+                            </StackPanel>
+                        </Border>
+                    </ctrls:SpacedStackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

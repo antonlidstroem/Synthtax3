@@ -1,0 +1,43 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+.idea/
+
+## NuGet
+*.nupkg
+.nuget/packages/
+packages/
+
+## Build
+publish/
+*.publish.xml
+_build/
+
+## Logs
+*.log
+logs/
+
+## Environment / secrets
+appsettings.Production.json
+appsettings.Local.json
+.env
+*.env
+
+## Database
+*.mdf
+*.ldf
+*.ndf
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Test results
+TestResults/
+coverage/
+*.trx
+*.coveragexml

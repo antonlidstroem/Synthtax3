@@ -1,0 +1,153 @@
+<Window x:Class="Synthtax.WPF.Views.Dialogs.BacklogItemDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrls="clr-namespace:Synthtax.WPF.Controls"
+        Title="Backlog-ärende"
+        Width="560" Height="620"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Border CornerRadius="10" ClipToBounds="True"
+            BorderBrush="#D1D5E0" BorderThickness="1">
+        <Border.Background>
+            <SolidColorBrush Color="#FFFFFF"/>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect Color="#A0B0C8" BlurRadius="24" ShadowDepth="4" Opacity="0.45"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="64"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0"
+                    Background="#F8F9FC"
+                    BorderBrush="#D1D5E0" BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="OnDragWindow">
+                <Grid Margin="20,0">
+                    <TextBlock Text="{Binding DialogTitle}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="#1A2744" VerticalAlignment="Center"/>
+                    <Button Content="✕" Width="28" Height="28"
+                            HorizontalAlignment="Right"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="#9AA3B8" Cursor="Hand"
+                            Click="OnClose"/>
+                </Grid>
+            </Border>
+
+            <!-- Form body -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0">
+                <StackPanel Margin="24,20">
+
+                    <!-- Title -->
+                    <TextBlock Text="Titel *" Style="{StaticResource SectionHeader}"/>
+                    <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,16" FontSize="14"/>
+
+                    <!-- Description -->
+                    <TextBlock Text="Beskrivning" Style="{StaticResource SectionHeader}"/>
+                    <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,16" MinHeight="80"
+                             TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"/>
+
+                    <!-- Status + Priority row -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Status" Style="{StaticResource SectionHeader}"/>
+                            <ComboBox ItemsSource="{Binding StatusOptions}"
+                                      SelectedItem="{Binding SelectedStatus}"
+                                      DisplayMemberPath="Label"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Prioritet" Style="{StaticResource SectionHeader}"/>
+                            <ComboBox ItemsSource="{Binding PriorityOptions}"
+                                      SelectedItem="{Binding SelectedPriority}"
+                                      DisplayMemberPath="Label"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Category + Deadline row -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Kategori" Style="{StaticResource SectionHeader}"/>
+                            <ComboBox ItemsSource="{Binding CategoryOptions}"
+                                      SelectedItem="{Binding SelectedCategory}"
+                                      DisplayMemberPath="Label"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Deadline" Style="{StaticResource SectionHeader}"/>
+                            <DatePicker SelectedDate="{Binding Deadline}"
+                                        Height="34" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Linked file path -->
+                    <TextBlock Text="Kopplad filsökväg" Style="{StaticResource SectionHeader}"/>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding LinkedFilePath, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0"/>
+                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                                Content="Bläddra..." Height="34"
+                                Command="{Binding BrowseFileCommand}"/>
+                    </Grid>
+
+                    <!-- Tags -->
+                    <TextBlock Text="Taggar (kommaseparerade)" Style="{StaticResource SectionHeader}"/>
+                    <TextBox Text="{Binding Tags, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,16"
+                             ToolTip="Exempel: performance, ui, auth"/>
+
+                    <!-- Error message -->
+                    <Border Background="#FFEBEE" CornerRadius="6" Padding="12,8"
+                            Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding ErrorMessage}"
+                                   Foreground="#E53935" FontSize="12"/>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Action buttons -->
+            <Border Grid.Row="2"
+                    Background="#F8F9FC"
+                    BorderBrush="#D1D5E0" BorderThickness="0,1,0,0">
+                <ctrls:SpacedStackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="24,0" >
+                    <Button Style="{StaticResource SecondaryButton}"
+                            Content="Avbryt" Width="100" Height="36"
+                            Click="OnClose"/>
+                    <Button Style="{StaticResource PrimaryButton}"
+                            Content="{Binding SaveButtonLabel}"
+                            Width="130" Height="36"
+                            Command="{Binding SaveCommand}"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}"/>
+                </ctrls:SpacedStackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

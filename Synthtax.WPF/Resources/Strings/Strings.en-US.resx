@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+
+  <data name="AppTitle"><value>Synthtax</value></data>
+  <data name="AppSubtitle"><value>Code Intelligence</value></data>
+
+  <data name="Nav_CodeAnalysis"><value>Code Analysis</value></data>
+  <data name="Nav_Metrics"><value>Metrics</value></data>
+  <data name="Nav_Git"><value>Git</value></data>
+  <data name="Nav_Security"><value>Security Analyzer</value></data>
+  <data name="Nav_Backlog"><value>Backlog</value></data>
+  <data name="Nav_UserProfile"><value>Profile</value></data>
+  <data name="Nav_Admin"><value>Administration</value></data>
+  <data name="Nav_Structure"><value>Structure Analysis</value></data>
+  <data name="Nav_PullRequests"><value>Pull Requests</value></data>
+  <data name="Nav_MethodExplorer"><value>Method Explorer</value></data>
+  <data name="Nav_CommentExplorer"><value>Comment Explorer</value></data>
+  <data name="Nav_AIDetection"><value>AI Detection</value></data>
+
+  <data name="TopBar_Export"><value>Export</value></data>
+  <data name="TopBar_Settings"><value>Settings</value></data>
+  <data name="TopBar_Language"><value>Language</value></data>
+  <data name="TopBar_LogOut"><value>Log Out</value></data>
+
+  <data name="Action_Analyze"><value>Analyze</value></data>
+  <data name="Action_Refresh"><value>Refresh</value></data>
+  <data name="Action_Cancel"><value>Cancel</value></data>
+  <data name="Action_Save"><value>Save</value></data>
+  <data name="Action_Delete"><value>Delete</value></data>
+  <data name="Action_Create"><value>Create</value></data>
+  <data name="Action_Edit"><value>Edit</value></data>
+  <data name="Action_Search"><value>Search</value></data>
+  <data name="Action_Close"><value>Close</value></data>
+  <data name="Action_BrowsePath"><value>Browse...</value></data>
+  <data name="Action_ExportCsv"><value>Export CSV</value></data>
+  <data name="Action_ExportJson"><value>Export JSON</value></data>
+  <data name="Action_ExportPdf"><value>Export PDF</value></data>
+
+  <data name="Login_Title"><value>Sign In</value></data>
+  <data name="Login_Username"><value>Username</value></data>
+  <data name="Login_Password"><value>Password</value></data>
+  <data name="Login_Button"><value>Sign In</value></data>
+  <data name="Login_Error_Invalid"><value>Invalid username or password.</value></data>
+  <data name="Login_Error_Locked"><value>Account is locked. Try again later.</value></data>
+
+  <data name="CodeAnalysis_Title"><value>Code Analysis</value></data>
+  <data name="CodeAnalysis_SolutionPath"><value>Solution path</value></data>
+  <data name="CodeAnalysis_LongMethods"><value>Long Methods</value></data>
+  <data name="CodeAnalysis_DeadVariables"><value>Dead Variables</value></data>
+  <data name="CodeAnalysis_UnnecessaryUsings"><value>Unnecessary Usings</value></data>
+  <data name="CodeAnalysis_TotalIssues"><value>Total Issues</value></data>
+
+  <data name="Metrics_Title"><value>Metrics</value></data>
+  <data name="Metrics_LOC"><value>Lines of Code (LOC)</value></data>
+  <data name="Metrics_Complexity"><value>Cyclomatic Complexity</value></data>
+  <data name="Metrics_Maintainability"><value>Maintainability Index</value></data>
+  <data name="Metrics_Trend"><value>Trend</value></data>
+  <data name="Metrics_Files"><value>Files</value></data>
+  <data name="Metrics_Methods"><value>Methods</value></data>
+
+  <data name="Git_Title"><value>Git Analysis</value></data>
+  <data name="Git_Commits"><value>Commits</value></data>
+  <data name="Git_Branches"><value>Branches</value></data>
+  <data name="Git_Churn"><value>File Churn</value></data>
+  <data name="Git_BusFactor"><value>Bus Factor</value></data>
+  <data name="Git_Author"><value>Author</value></data>
+  <data name="Git_Date"><value>Date</value></data>
+  <data name="Git_Message"><value>Message</value></data>
+
+  <data name="Security_Title"><value>Security Analysis</value></data>
+  <data name="Security_Credentials"><value>Hardcoded Credentials</value></data>
+  <data name="Security_SqlInjection"><value>SQL Injection Risk</value></data>
+  <data name="Security_InsecureRandom"><value>Insecure Random Usage</value></data>
+  <data name="Security_CancellationToken"><value>Missing CancellationTokens</value></data>
+  <data name="Security_Severity"><value>Severity</value></data>
+  <data name="Security_File"><value>File</value></data>
+  <data name="Security_Line"><value>Line</value></data>
+  <data name="Security_Description"><value>Description</value></data>
+  <data name="Security_Recommendation"><value>Recommendation</value></data>
+
+  <data name="Backlog_Title"><value>Backlog</value></data>
+  <data name="Backlog_NewItem"><value>New Item</value></data>
+  <data name="Backlog_ItemTitle"><value>Title</value></data>
+  <data name="Backlog_Description"><value>Description</value></data>
+  <data name="Backlog_Status"><value>Status</value></data>
+  <data name="Backlog_Priority"><value>Priority</value></data>
+  <data name="Backlog_Category"><value>Category</value></data>
+  <data name="Backlog_Deadline"><value>Deadline</value></data>
+  <data name="Backlog_Todo"><value>To Do</value></data>
+  <data name="Backlog_InProgress"><value>In Progress</value></data>
+  <data name="Backlog_Done"><value>Done</value></data>
+
+  <data name="Status_Analyzing"><value>Analyzing...</value></data>
+  <data name="Status_Ready"><value>Ready</value></data>
+  <data name="Status_Error"><value>An error occurred</value></data>
+  <data name="Status_Loading"><value>Loading...</value></data>
+  <data name="Status_Saving"><value>Saving...</value></data>
+  <data name="Status_NoData"><value>No data available</value></data>
+  <data name="Status_ExportSuccess"><value>Export complete</value></data>
+
+  <data name="Col_File"><value>File</value></data>
+  <data name="Col_Line"><value>Line</value></data>
+  <data name="Col_Type"><value>Type</value></data>
+  <data name="Col_Description"><value>Description</value></data>
+  <data name="Col_Severity"><value>Severity</value></data>
+  <data name="Col_Method"><value>Method</value></data>
+  <data name="Col_Lines"><value>Lines</value></data>
+</root>

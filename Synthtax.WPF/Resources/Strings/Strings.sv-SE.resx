@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+
+  <!-- App / Nav -->
+  <data name="AppTitle"><value>Synthtax</value></data>
+  <data name="AppSubtitle"><value>Kodintelligens</value></data>
+
+  <!-- Navigation modules -->
+  <data name="Nav_CodeAnalysis"><value>Kodanalys</value></data>
+  <data name="Nav_Metrics"><value>Metrics</value></data>
+  <data name="Nav_Git"><value>Git</value></data>
+  <data name="Nav_Security"><value>Säkerhetsanalys</value></data>
+  <data name="Nav_Backlog"><value>Backlog</value></data>
+  <data name="Nav_UserProfile"><value>Profil</value></data>
+  <data name="Nav_Admin"><value>Administration</value></data>
+  <data name="Nav_Structure"><value>Strukturanalys</value></data>
+  <data name="Nav_PullRequests"><value>Pull Requests</value></data>
+  <data name="Nav_MethodExplorer"><value>Metodutforskaren</value></data>
+  <data name="Nav_CommentExplorer"><value>Kommentarsutforskaren</value></data>
+  <data name="Nav_AIDetection"><value>AI-detektering</value></data>
+
+  <!-- Topbar -->
+  <data name="TopBar_Export"><value>Exportera</value></data>
+  <data name="TopBar_Settings"><value>Inställningar</value></data>
+  <data name="TopBar_Language"><value>Språk</value></data>
+  <data name="TopBar_LogOut"><value>Logga ut</value></data>
+
+  <!-- Common actions -->
+  <data name="Action_Analyze"><value>Analysera</value></data>
+  <data name="Action_Refresh"><value>Uppdatera</value></data>
+  <data name="Action_Cancel"><value>Avbryt</value></data>
+  <data name="Action_Save"><value>Spara</value></data>
+  <data name="Action_Delete"><value>Ta bort</value></data>
+  <data name="Action_Create"><value>Skapa</value></data>
+  <data name="Action_Edit"><value>Redigera</value></data>
+  <data name="Action_Search"><value>Sök</value></data>
+  <data name="Action_Close"><value>Stäng</value></data>
+  <data name="Action_BrowsePath"><value>Bläddra...</value></data>
+  <data name="Action_ExportCsv"><value>Exportera CSV</value></data>
+  <data name="Action_ExportJson"><value>Exportera JSON</value></data>
+  <data name="Action_ExportPdf"><value>Exportera PDF</value></data>
+
+  <!-- Auth / Login -->
+  <data name="Login_Title"><value>Logga in</value></data>
+  <data name="Login_Username"><value>Användarnamn</value></data>
+  <data name="Login_Password"><value>Lösenord</value></data>
+  <data name="Login_Button"><value>Logga in</value></data>
+  <data name="Login_Error_Invalid"><value>Ogiltigt användarnamn eller lösenord.</value></data>
+  <data name="Login_Error_Locked"><value>Kontot är låst. Försök igen senare.</value></data>
+
+  <!-- Code Analysis -->
+  <data name="CodeAnalysis_Title"><value>Kodanalys</value></data>
+  <data name="CodeAnalysis_SolutionPath"><value>Sökväg till solution</value></data>
+  <data name="CodeAnalysis_LongMethods"><value>Långa metoder</value></data>
+  <data name="CodeAnalysis_DeadVariables"><value>Döda variabler</value></data>
+  <data name="CodeAnalysis_UnnecessaryUsings"><value>Onödiga usings</value></data>
+  <data name="CodeAnalysis_TotalIssues"><value>Totalt antal problem</value></data>
+
+  <!-- Metrics -->
+  <data name="Metrics_Title"><value>Metrics</value></data>
+  <data name="Metrics_LOC"><value>Kodrader (LOC)</value></data>
+  <data name="Metrics_Complexity"><value>Cyklomatisk komplexitet</value></data>
+  <data name="Metrics_Maintainability"><value>Underhållsindex</value></data>
+  <data name="Metrics_Trend"><value>Trend</value></data>
+  <data name="Metrics_Files"><value>Filer</value></data>
+  <data name="Metrics_Methods"><value>Metoder</value></data>
+
+  <!-- Git -->
+  <data name="Git_Title"><value>Git-analys</value></data>
+  <data name="Git_Commits"><value>Commits</value></data>
+  <data name="Git_Branches"><value>Brancher</value></data>
+  <data name="Git_Churn"><value>Fil-churn</value></data>
+  <data name="Git_BusFactor"><value>Bus factor</value></data>
+  <data name="Git_Author"><value>Författare</value></data>
+  <data name="Git_Date"><value>Datum</value></data>
+  <data name="Git_Message"><value>Meddelande</value></data>
+
+  <!-- Security -->
+  <data name="Security_Title"><value>Säkerhetsanalys</value></data>
+  <data name="Security_Credentials"><value>Hårdkodade credentials</value></data>
+  <data name="Security_SqlInjection"><value>SQL-injection-risk</value></data>
+  <data name="Security_InsecureRandom"><value>Osäkra Random-anrop</value></data>
+  <data name="Security_CancellationToken"><value>Saknade CancellationTokens</value></data>
+  <data name="Security_Severity"><value>Allvarlighet</value></data>
+  <data name="Security_File"><value>Fil</value></data>
+  <data name="Security_Line"><value>Rad</value></data>
+  <data name="Security_Description"><value>Beskrivning</value></data>
+  <data name="Security_Recommendation"><value>Rekommendation</value></data>
+
+  <!-- Backlog -->
+  <data name="Backlog_Title"><value>Backlog</value></data>
+  <data name="Backlog_NewItem"><value>Nytt ärende</value></data>
+  <data name="Backlog_ItemTitle"><value>Titel</value></data>
+  <data name="Backlog_Description"><value>Beskrivning</value></data>
+  <data name="Backlog_Status"><value>Status</value></data>
+  <data name="Backlog_Priority"><value>Prioritet</value></data>
+  <data name="Backlog_Category"><value>Kategori</value></data>
+  <data name="Backlog_Deadline"><value>Deadline</value></data>
+  <data name="Backlog_Todo"><value>Att göra</value></data>
+  <data name="Backlog_InProgress"><value>Pågår</value></data>
+  <data name="Backlog_Done"><value>Klar</value></data>
+
+  <!-- Status messages -->
+  <data name="Status_Analyzing"><value>Analyserar...</value></data>
+  <data name="Status_Ready"><value>Redo</value></data>
+  <data name="Status_Error"><value>Fel uppstod</value></data>
+  <data name="Status_Loading"><value>Laddar...</value></data>
+  <data name="Status_Saving"><value>Sparar...</value></data>
+  <data name="Status_NoData"><value>Inga data tillgängliga</value></data>
+  <data name="Status_ExportSuccess"><value>Export klar</value></data>
+
+  <!-- Column headers shared -->
+  <data name="Col_File"><value>Fil</value></data>
+  <data name="Col_Line"><value>Rad</value></data>
+  <data name="Col_Type"><value>Typ</value></data>
+  <data name="Col_Description"><value>Beskrivning</value></data>
+  <data name="Col_Severity"><value>Allvarlighet</value></data>
+  <data name="Col_Method"><value>Metod</value></data>
+  <data name="Col_Lines"><value>Rader</value></data>
+</root>

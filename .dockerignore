@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.git/
+**/Synthtax.WPF/
+**/*.user
+**/.vs/
+**/TestResults/
+README.md
+docker-compose*.yml

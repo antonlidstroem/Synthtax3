@@ -1,0 +1,108 @@
+<UserControl x:Class="Synthtax.WPF.Views.SecurityView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrls="clr-namespace:Synthtax.WPF.Controls"
+             Background="{StaticResource SurfaceBrush}">
+    <Grid Margin="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Style="{StaticResource PageTitle}" Text="Säkerhetsanalys"/>
+            <TextBlock Text="Credentials, SQL-injection, osäkra Random-anrop och saknade CancellationTokens."
+                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13"/>
+        </StackPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ctrls:HintTextBox Grid.Column="0" Text="{Binding SolutionPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0"
+                           Hint="Lokal sökväg till .sln-fil eller GitHub/GitLab-URL..."/>
+                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Bläddra..."
+                        Margin="0,0,8,0" Command="{Binding BrowseCommand}"/>
+                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Content="Analysera"
+                        MinWidth="110" Command="{Binding AnalyzeCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="KRITISKA"/>
+                    <TextBlock Text="{Binding CriticalCount}" FontSize="32" FontWeight="Bold" Foreground="#B71C1C"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="4,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="HÖGA"/>
+                    <TextBlock Text="{Binding HighCount}" FontSize="32" FontWeight="Bold" Foreground="#E53935"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="4,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="MEDEL"/>
+                    <TextBlock Text="{Binding MediumCount}" FontSize="32" FontWeight="Bold" Foreground="#F59E0B"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="3" Style="{StaticResource StatCard}" Margin="8,0,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="LÅGA"/>
+                    <TextBlock Text="{Binding LowCount}" FontSize="32" FontWeight="Bold" Foreground="#1DB36B"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <ctrls:SpacedStackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12" >
+                    <RadioButton Content="Alla"           IsChecked="{Binding ShowAll}"         GroupName="secTabs"/>
+                    <RadioButton Content="Credentials"   IsChecked="{Binding ShowCredentials}" GroupName="secTabs"/>
+                    <RadioButton Content="SQL Injection" IsChecked="{Binding ShowSql}"         GroupName="secTabs"/>
+                    <RadioButton Content="Random"        IsChecked="{Binding ShowRandom}"      GroupName="secTabs"/>
+                    <RadioButton Content="CancellationToken" IsChecked="{Binding ShowCt}"     GroupName="secTabs"/>
+                    <Separator Width="1" Background="{StaticResource BorderBrush}" Margin="8,0"/>
+                    <Button Style="{StaticResource SecondaryButton}" Content="PDF" Padding="10,4" Height="28"
+                            Command="{Binding ExportPdfCommand}"/>
+                </ctrls:SpacedStackPanel>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding CurrentIssues}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Fil"           Binding="{Binding FileName}"      Width="160"/>
+                        <DataGridTextColumn Header="Rad"           Binding="{Binding LineNumber}"    Width="55"/>
+                        <DataGridTextColumn Header="Titel"         Binding="{Binding Title}"         Width="200"/>
+                        <DataGridTextColumn Header="Kategori"      Binding="{Binding Category}"      Width="110"/>
+                        <DataGridTextColumn Header="Rekommendation" Binding="{Binding Recommendation}" Width="*"/>
+                        <DataGridTemplateColumn Header="Allvarlighet" Width="100">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}"
+                                            CornerRadius="4" Padding="6,2" HorizontalAlignment="Center" Margin="4,2">
+                                        <TextBlock Text="{Binding Severity}" Foreground="White"
+                                                   FontSize="11" FontWeight="SemiBold"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
