@@ -26,7 +26,7 @@ public partial class LoginWindow : Window
         PasswordBox.PasswordChanged += (_, _) =>
         {
             vm.Password = PasswordBox.Password;
-            vm.LoginAsyncCommand.NotifyCanExecuteChanged(); // Uppdaterar CanExecute när lösenord ändras
+            vm.LoginCommand.NotifyCanExecuteChanged(); // Uppdaterar CanExecute när lösenord ändras
         };
 
         // Enter-tangent i UsernameBox fokuserar PasswordBox
@@ -39,8 +39,8 @@ public partial class LoginWindow : Window
         // Enter-tangent i PasswordBox triggar login
         PasswordBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Return && vm.LoginAsyncCommand.CanExecute(null))
-                vm.LoginAsyncCommand.Execute(null);
+            if (e.Key == Key.Return && vm.LoginCommand.CanExecute(null))
+                vm.LoginCommand.Execute(null);
         };
     }
 

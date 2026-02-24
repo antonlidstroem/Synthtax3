@@ -24,20 +24,42 @@ public class ApiClient
         _http = http;
         _logger = logger;
         _tokenStore = tokenStore;
+
+        _logger.LogInformation("ApiClient initialized. BaseAddress: {BaseAddress}", _http.BaseAddress);
     }
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
     public async Task<AuthResponseDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
     {
-        var response = await PostAsync<AuthResponseDto>("api/auth/login", dto, skipAuth: true, ct: ct);
-        if (response is not null)
+        _logger.LogInformation("Attempting login for user: {UserName}", dto.UserName);
+
+        var response = await PostRawAsync("api/auth/login", dto, skipAuth: true, ct: ct);
+        if (response is null)
         {
-            _tokenStore.AccessToken = response.AccessToken;
-            _tokenStore.RefreshToken = response.RefreshToken;
-            _tokenStore.CurrentUser = response.User;
+            _logger.LogError("LoginAsync: PostRawAsync returned null – network error or exception. Check logs above.");
+            return null;
         }
-        return response;
+
+        _logger.LogInformation("Login response status: {StatusCode}", response.StatusCode);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Login failed. Status: {StatusCode}. Body: {Body}",
+                response.StatusCode, errorBody);
+            return null;
+        }
+
+        var result = await DeserializeAsync<AuthResponseDto>(response, "api/auth/login");
+        if (result is not null)
+        {
+            _tokenStore.AccessToken = result.AccessToken;
+            _tokenStore.RefreshToken = result.RefreshToken;
+            _tokenStore.CurrentUser = result.User;
+            _logger.LogInformation("Login succeeded for user: {UserName}", dto.UserName);
+        }
+        return result;
     }
 
     public async Task LogoutAsync(CancellationToken ct = default)
@@ -132,6 +154,17 @@ public class ApiClient
         return request;
     }
 
+    /// <summary>
+    /// Internal POST that returns the raw HttpResponseMessage so callers
+    /// like LoginAsync can inspect status/body before deserializing.
+    /// </summary>
+    private async Task<HttpResponseMessage?> PostRawAsync(string url, object? body,
+        bool skipAuth, CancellationToken ct)
+    {
+        var request = BuildRequest(HttpMethod.Post, url, body, skipAuth);
+        return await SendWithRefreshAsync(request, ct, skipAuth);
+    }
+
     private async Task<HttpResponseMessage?> SendWithRefreshAsync(
         HttpRequestMessage request, CancellationToken ct, bool skipAuth = false)
     {
@@ -150,8 +183,9 @@ public class ApiClient
                     var refreshed = await TryRefreshTokenAsync(ct);
                     if (refreshed)
                     {
-                        // Rebuild request (cannot resend consumed request)
-                        var retryRequest = BuildRequest(request.Method, request.RequestUri!.ToString());
+                        var retryRequest = BuildRequest(request.Method,
+                            request.RequestUri!.ToString());
+
                         if (request.Content is StringContent sc)
                             retryRequest.Content = new StringContent(
                                 await sc.ReadAsStringAsync(ct), Encoding.UTF8, "application/json");
@@ -164,16 +198,29 @@ public class ApiClient
                     _isRefreshing = false;
                 }
 
-                // Refresh failed → user must log in again
                 _tokenStore.Clear();
                 SessionExpired?.Invoke(this, EventArgs.Empty);
             }
 
             return response;
         }
+        catch (HttpRequestException ex)
+        {
+            // Nätverksfel – API är troligen nere eller BaseAddress är fel
+            _logger.LogError(ex,
+                "Network error sending {Method} {Url}. " +
+                "Check that the API is running and that BaseAddress ({BaseAddress}) is correct.",
+                request.Method, request.RequestUri, _http.BaseAddress);
+            return null;
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Request timed out: {Method} {Url}", request.Method, request.RequestUri);
+            return null;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "HTTP request failed: {Method} {Url}",
+            _logger.LogError(ex, "Unexpected error sending {Method} {Url}",
                 request.Method, request.RequestUri);
             return null;
         }
@@ -189,7 +236,11 @@ public class ApiClient
             refreshRequest.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
             var response = await _http.SendAsync(refreshRequest, ct);
-            if (!response.IsSuccessStatusCode) return false;
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Token refresh failed with status {StatusCode}", response.StatusCode);
+                return false;
+            }
 
             var content = await response.Content.ReadAsStringAsync(ct);
             var auth = JsonConvert.DeserializeObject<AuthResponseDto>(content);
@@ -200,8 +251,9 @@ public class ApiClient
             _tokenStore.CurrentUser = auth.User;
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Exception during token refresh.");
             return false;
         }
     }
@@ -212,7 +264,9 @@ public class ApiClient
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("API returned {StatusCode} for {Url}", response.StatusCode, url);
+            var body = await response.Content.ReadAsStringAsync();
+            _logger.LogWarning("API returned {StatusCode} for {Url}. Body: {Body}",
+                response.StatusCode, url, body);
             return default;
         }
 
