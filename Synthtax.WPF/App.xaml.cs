@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Synthtax.WPF.Services;
 using Synthtax.WPF.ViewModels;
 using Synthtax.WPF.Views;
+using System.Diagnostics;
+
 
 namespace Synthtax.WPF;
 
@@ -22,6 +24,11 @@ public partial class App : Application
 
         var apiClient = _services.GetRequiredService<ApiClient>();
         apiClient.SessionExpired += (_, _) => Dispatcher.Invoke(ShowLogin);
+
+
+        //Kollar felaktiga bindningar
+        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.All;
+        PresentationTraceSources.DataBindingSource.Listeners.Add(new DefaultTraceListener());
 
         ShowLogin();
     }

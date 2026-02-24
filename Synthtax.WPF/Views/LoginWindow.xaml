@@ -1,6 +1,7 @@
 <Window x:Class="Synthtax.WPF.Views.LoginWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:diag="clr-namespace:System.Diagnostics;assembly=WindowsBase"
         Title="Synthtax – Login"
         Width="420" Height="500"
         ResizeMode="NoResize"
@@ -57,7 +58,7 @@
                         BorderBrush="#FFFFFF25" BorderThickness="1"
                         Margin="0,0,0,16">
                     <TextBox x:Name="UsernameBox"
-                             Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                             Text="{Binding Username, UpdateSourceTrigger=PropertyChanged, diag:PresentationTraceSources.TraceLevel=High}"
                              Background="Transparent"
                              Foreground="White" CaretBrush="White"
                              BorderThickness="0"
@@ -83,7 +84,7 @@
                 <!-- Error message -->
                 <Border Background="#FF3B3B20" CornerRadius="6"
                         Padding="12,8" Margin="0,0,0,16"
-                        Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+                        Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}, diag:PresentationTraceSources.TraceLevel=High}">
                     <TextBlock Text="{Binding ErrorMessage}"
                                Foreground="#FF8080" FontSize="12"
                                TextWrapping="Wrap"/>
@@ -91,13 +92,13 @@
 
                 <!-- Login button -->
                 <Button Style="{StaticResource PrimaryButton}"
-                        Command="{Binding LoginCommand}"
+                        Command="{Binding LoginAsyncCommand}"
                         Height="44" FontSize="14">
                     <Grid>
                         <TextBlock Text="Logga in"
-                                   Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                   Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}, diag:PresentationTraceSources.TraceLevel=High}"/>
                         <StackPanel Orientation="Horizontal"
-                                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}, diag:PresentationTraceSources.TraceLevel=High}">
                             <TextBlock Text="Loggar in..." FontSize="13"/>
                         </StackPanel>
                     </Grid>

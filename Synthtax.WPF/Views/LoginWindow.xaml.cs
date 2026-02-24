@@ -1,7 +1,9 @@
+using System;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Synthtax.WPF.ViewModels;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Synthtax.WPF.Views;
 
@@ -13,34 +15,40 @@ public partial class LoginWindow : Window
     {
         InitializeComponent();
 
+        // Hämta ViewModel från DI
         var vm = services.GetRequiredService<LoginViewModel>();
-        vm.LoginSucceeded += (_, _) => LoginSucceeded?.Invoke(this, EventArgs.Empty);
         DataContext = vm;
 
-        // Wire PasswordBox manually (can't bind SecureString in WPF easily)
+        // Koppla event för lyckad inloggning
+        vm.LoginSucceeded += (_, _) => LoginSucceeded?.Invoke(this, EventArgs.Empty);
+
+        // Wire PasswordBox manuellt (SecureString-bindning är komplicerad i WPF)
         PasswordBox.PasswordChanged += (_, _) =>
         {
             vm.Password = PasswordBox.Password;
-            vm.LoginCommand.NotifyCanExecuteChanged(); // Körs varje gång lösenord ändras
+            vm.LoginAsyncCommand.NotifyCanExecuteChanged(); // Uppdaterar CanExecute när lösenord ändras
         };
 
-        // Enter key on username focuses password
+        // Enter-tangent i UsernameBox fokuserar PasswordBox
         UsernameBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Return) PasswordBox.Focus();
+            if (e.Key == Key.Return)
+                PasswordBox.Focus();
         };
 
-        // Enter key on password triggers login
+        // Enter-tangent i PasswordBox triggar login
         PasswordBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Return && vm.LoginCommand.CanExecute(null))
-                vm.LoginCommand.Execute(null);
+            if (e.Key == Key.Return && vm.LoginAsyncCommand.CanExecute(null))
+                vm.LoginAsyncCommand.Execute(null);
         };
     }
 
+    // Gör fönstret dragbart via mus
     private void OnDragWindow(object sender, MouseButtonEventArgs e)
         => DragMove();
 
+    // Stänger applikationen
     private void OnClose(object sender, RoutedEventArgs e)
         => Application.Current.Shutdown();
 }
