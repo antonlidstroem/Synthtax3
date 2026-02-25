@@ -17,25 +17,7 @@
                        Foreground="{StaticResource TextSecondaryBrush}" FontSize="13"/>
         </StackPanel>
 
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding RepositoryPath, UpdateSourceTrigger=PropertyChanged}"
-                         Margin="0,0,10,0" ToolTip="Sökväg till Git-repo"/>
-                <ComboBox Grid.Column="1" Width="100" Margin="0,0,8,0"
-                          SelectedItem="{Binding MaxCommits}"
-                          ItemsSource="{Binding CommitLimits}"/>
-                <Button Grid.Column="2" Style="{StaticResource SecondaryButton}"
-                        Content="Bläddra..." Margin="0,0,8,0" Command="{Binding BrowseCommand}"/>
-                <Button Grid.Column="3" Style="{StaticResource PrimaryButton}"
-                        Content="Analysera" MinWidth="110" Command="{Binding AnalyzeCommand}"/>
-            </Grid>
-        </Border>
+        <ctrls:SolutionInputBar Grid.Row="1"/>
 
         <!-- Summary stats -->
         <Grid Grid.Row="2" Margin="0,0,0,16">

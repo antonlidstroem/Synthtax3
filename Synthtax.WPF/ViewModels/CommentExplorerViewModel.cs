@@ -6,9 +6,9 @@ using Synthtax.WPF.Services;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class CommentExplorerViewModel : ViewModelBase
+public partial class CommentExplorerViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath = string.Empty;
+
     private string _searchText   = string.Empty;
     private bool   _hasData;
     private bool   _showAll      = true;
@@ -20,7 +20,7 @@ public partial class CommentExplorerViewModel : ViewModelBase
     // ── Summary counts ─────────────────────────────────────────────────
     private int _totalComments, _xmlDocCount, _todoCount, _regionCount;
 
-    public string SolutionPath { get => _solutionPath; set => SetProperty(ref _solutionPath, value); }
+
     public bool   HasData      { get => _hasData;       private set => SetProperty(ref _hasData, value); }
 
     public string SearchText
@@ -50,17 +50,7 @@ public partial class CommentExplorerViewModel : ViewModelBase
     public CommentExplorerViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title  = "Välj .sln-fil",
-            Filter = "Solution files (*.sln)|*.sln"
-        };
-        if (dlg.ShowDialog() == true)
-            SolutionPath = dlg.FileName;
-    }
+
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

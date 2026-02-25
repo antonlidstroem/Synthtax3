@@ -7,14 +7,14 @@ using System.IO;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class SecurityViewModel : ViewModelBase
+public partial class SecurityViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath = string.Empty;
+
     private int _criticalCount, _highCount, _mediumCount, _lowCount;
     private bool _showAll = true, _showCredentials, _showSql, _showRandom, _showCt;
     private SecurityIssueDto? _selectedIssue;
 
-    public string SolutionPath { get => _solutionPath; set => SetProperty(ref _solutionPath, value); }
+  
     public int CriticalCount   { get => _criticalCount; private set => SetProperty(ref _criticalCount, value); }
     public int HighCount       { get => _highCount;     private set => SetProperty(ref _highCount, value); }
     public int MediumCount     { get => _mediumCount;   private set => SetProperty(ref _mediumCount, value); }
@@ -33,12 +33,7 @@ public partial class SecurityViewModel : ViewModelBase
 
     public SecurityViewModel(ApiClient api, TokenStore tokenStore) : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog { Title = "Välj .sln-fil", Filter = "Solution files (*.sln)|*.sln" };
-        if (dlg.ShowDialog() == true) SolutionPath = dlg.FileName;
-    }
+
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

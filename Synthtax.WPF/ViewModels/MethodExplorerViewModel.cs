@@ -6,9 +6,9 @@ using Synthtax.WPF.Services;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class MethodExplorerViewModel : ViewModelBase
+public partial class MethodExplorerViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath   = string.Empty;
+
     private string _searchText     = string.Empty;
     private string _classFilter    = string.Empty;
     private bool   _showOnlyPublic;
@@ -21,7 +21,7 @@ public partial class MethodExplorerViewModel : ViewModelBase
     // ── Summary counts ─────────────────────────────────────────────────
     private int _totalMethods, _asyncCount, _staticCount, _avgComplexity;
 
-    public string SolutionPath   { get => _solutionPath;    set => SetProperty(ref _solutionPath, value); }
+  
     public string ClassFilter    { get => _classFilter;     set { if (SetProperty(ref _classFilter, value))     ApplyFilter(); } }
     public bool   ShowOnlyPublic { get => _showOnlyPublic;  set { if (SetProperty(ref _showOnlyPublic, value))  ApplyFilter(); } }
     public bool   ShowOnlyAsync  { get => _showOnlyAsync;   set { if (SetProperty(ref _showOnlyAsync, value))   ApplyFilter(); } }
@@ -56,17 +56,6 @@ public partial class MethodExplorerViewModel : ViewModelBase
     public MethodExplorerViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title  = "Välj .sln-fil",
-            Filter = "Solution files (*.sln)|*.sln"
-        };
-        if (dlg.ShowDialog() == true)
-            SolutionPath = dlg.FileName;
-    }
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

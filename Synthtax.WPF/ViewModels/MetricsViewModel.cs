@@ -6,7 +6,7 @@ using Synthtax.WPF.Services;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class MetricsViewModel : ViewModelBase
+public partial class MetricsViewModel : AnalysisViewModelBase
 {
     private string _solutionPath = string.Empty;
     private int _totalLoc;
@@ -26,12 +26,7 @@ public partial class MetricsViewModel : ViewModelBase
 
     public MetricsViewModel(ApiClient api, TokenStore tokenStore) : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog { Title = "Välj .sln-fil", Filter = "Solution files (*.sln)|*.sln" };
-        if (dlg.ShowDialog() == true) SolutionPath = dlg.FileName;
-    }
+  
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

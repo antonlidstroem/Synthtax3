@@ -84,9 +84,9 @@ public partial class StructureTreeNode : ObservableObject
     }
 }
 
-public partial class StructureAnalysisViewModel : ViewModelBase
+public partial class StructureAnalysisViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath   = string.Empty;
+  
     private string _searchText     = string.Empty;
     private bool   _hasData;
     private bool   _showMethods    = true;
@@ -97,11 +97,7 @@ public partial class StructureAnalysisViewModel : ViewModelBase
     // ── Summary counts ─────────────────────────────────────────────────
     private int _totalProjects, _totalClasses, _totalMethods, _totalInterfaces;
 
-    public string SolutionPath
-    {
-        get => _solutionPath;
-        set => SetProperty(ref _solutionPath, value);
-    }
+
 
     public string SearchText
     {
@@ -151,17 +147,7 @@ public partial class StructureAnalysisViewModel : ViewModelBase
     public StructureAnalysisViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title  = "Välj .sln-fil",
-            Filter = "Solution files (*.sln)|*.sln"
-        };
-        if (dlg.ShowDialog() == true)
-            SolutionPath = dlg.FileName;
-    }
+ 
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

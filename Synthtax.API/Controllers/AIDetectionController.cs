@@ -14,20 +14,23 @@ public class AIDetectionController : ControllerBase
 {
     private readonly IAIDetectionService _aiDetectionService;
     private readonly RepositoryResolverService _resolver;
+    private readonly ILogger<AIDetectionController> _logger;
 
     public AIDetectionController(
         IAIDetectionService aiDetectionService,
-        RepositoryResolverService resolver)
+        RepositoryResolverService resolver,
+        ILogger<AIDetectionController> logger)
     {
         _aiDetectionService = aiDetectionService;
         _resolver = resolver;
+        _logger = logger;
     }
 
     /// <summary>
-    /// Analyserar en hel solution för AI-genererade kodmönster.
-    /// Accepterar lokal .sln-sökväg ELLER GitHub/GitLab-URL.
+    /// Analyserar hela solutionen för AI-genererad kod.
+    /// Accepterar lokal .sln-sökväg, lokal mapp eller GitHub-URL.
     /// </summary>
-    [HttpPost("analyze")]
+    [HttpPost("solution")]
     [ProducesResponseType(typeof(AIDetectionResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AnalyzeSolution(
@@ -35,35 +38,45 @@ public class AIDetectionController : ControllerBase
         CancellationToken cancellationToken)
     {
         var resolved = await _resolver.ResolveAsync(request.SolutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
+        _logger.LogInformation("AI detection analysis: {Path}", resolved.LocalPath);
         try
         {
             var result = await _aiDetectionService.AnalyzeSolutionAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Analyserar en enskild fil.</summary>
+    /// <summary>
+    /// Analyserar en enskild lokal fil.
+    /// </summary>
     [HttpGet("file")]
     [ProducesResponseType(typeof(AIDetectionFileResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AnalyzeFile(
         [FromQuery] string filePath,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(filePath))
-            return BadRequest(new { Message = "filePath is required." });
+            return BadRequest(new { Message = "filePath saknas." });
 
         if (!System.IO.File.Exists(filePath))
-            return NotFound(new { Message = $"File not found: {filePath}" });
+            return NotFound(new { Message = $"Filen hittades inte: {filePath}" });
 
         var result = await _aiDetectionService.AnalyzeFileAsync(filePath, cancellationToken);
         return Ok(result);
     }
 
-    /// <summary>Analyserar kod skickad direkt som sträng.</summary>
+    /// <summary>
+    /// Analyserar kodsträng direkt (utan att ladda en solution).
+    /// </summary>
     [HttpPost("code")]
     [ProducesResponseType(typeof(AIDetectionFileResultDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> AnalyzeCode(
@@ -71,12 +84,12 @@ public class AIDetectionController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Code))
-            return BadRequest(new { Message = "Code is required." });
+            return BadRequest(new { Message = "Code saknas." });
 
-        var result = await _aiDetectionService.AnalyzeCodeAsync(
-            request.Code, request.FileName ?? "inline.cs", cancellationToken);
+        var result = await _aiDetectionService.AnalyzeCodeTextAsync(
+            request.Code,
+            request.FileName ?? "input.cs",
+            cancellationToken);
         return Ok(result);
     }
-
-
 }
