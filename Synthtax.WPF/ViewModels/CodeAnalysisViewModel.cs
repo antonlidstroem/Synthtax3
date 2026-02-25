@@ -7,7 +7,7 @@ using System.IO;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class CodeAnalysisViewModel : ViewModelBase
+public partial class CodeAnalysisViewModel : AnalysisViewModelBase
 {
     private string _solutionPath = string.Empty;
     private bool _showLongMethods = true;
@@ -59,17 +59,7 @@ public partial class CodeAnalysisViewModel : ViewModelBase
     public CodeAnalysisViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title = "Välj .sln-fil",
-            Filter = "Solution files (*.sln)|*.sln"
-        };
-        if (dlg.ShowDialog() == true)
-            SolutionPath = dlg.FileName;
-    }
+    
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
