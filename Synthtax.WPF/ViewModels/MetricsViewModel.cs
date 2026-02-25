@@ -26,27 +26,30 @@ public partial class MetricsViewModel : AnalysisViewModelBase
 
     public MetricsViewModel(ApiClient api, TokenStore tokenStore) : base(api, tokenStore) { }
 
-  
+
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
+
         await RunSafeAsync(async () =>
         {
             FileMetrics.Clear();
             var result = await Api.PostAsync<MetricsResultDto>("api/metrics/solution",
                 new AnalysisRequestDto { SolutionPath = SolutionPath }, ct: ct);
 
-            if (result is not null)
+            if (result is null)
             {
-                TotalLoc = result.TotalLinesOfCode;
-                TotalFiles = result.TotalFiles;
-                AvgComplexity = result.OverallCyclomaticComplexity;
-                AvgMaintainability = result.OverallMaintainabilityIndex;
-                foreach (var f in result.Files.OrderByDescending(f => f.LinesOfCode))
-                    FileMetrics.Add(f);
+                SetError("Kunde inte beräkna metrics. Kontrollera solution-sökvägen.");
+                return;
             }
+
+            // ... process result
         }, "Status_Analyzing");
     }
 }

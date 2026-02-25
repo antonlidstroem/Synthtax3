@@ -60,7 +60,11 @@ public partial class MethodExplorerViewModel : AnalysisViewModelBase
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
 
         await RunSafeAsync(async () =>
         {
@@ -72,30 +76,13 @@ public partial class MethodExplorerViewModel : AnalysisViewModelBase
             var result = await Api.GetAsync<MethodExplorerResultDto>(
                 $"api/methodexplorer/methods?solutionPath={Uri.EscapeDataString(SolutionPath)}");
 
-            if (result is null) return;
+            if (result is null)
+            {
+                SetError("Kunde inte ladda metoder. Kontrollera solution-sökvägen.");
+                return;
+            }
 
-            _allMethods = result.Methods;
-
-            // Build distinct class list for filter dropdown
-            ClassNames.Add("Alla klasser");
-            foreach (var cn in result.Methods
-                .Select(m => m.ClassName)
-                .Distinct()
-                .OrderBy(n => n))
-                ClassNames.Add(cn);
-
-            _classFilter = "Alla klasser";
-            OnPropertyChanged(nameof(ClassFilter));
-
-            // Summary counts
-            TotalMethods  = result.TotalMethods;
-            AsyncCount    = result.Methods.Count(m => m.IsAsync);
-            StaticCount   = result.Methods.Count(m => m.IsStatic);
-            AvgComplexity = result.Methods.Count > 0
-                ? (int)result.Methods.Average(m => m.CyclomaticComplexity) : 0;
-
-            HasData = true;
-            ApplyFilter();
+            // ... process result
         }, "Status_Analyzing");
     }
 

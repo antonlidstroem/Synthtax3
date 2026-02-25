@@ -52,12 +52,27 @@ public partial class GitViewModel : AnalysisViewModelBase
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(RepositoryPath)) return;
+        // IMPROVED: Validera input först
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
+
         await RunSafeAsync(async () =>
         {
             var result = await Api.GetAsync<GitAnalysisResultDto>(
                 $"api/git/analyze?repositoryPath={Uri.EscapeDataString(RepositoryPath)}&maxCommits={MaxCommits}");
-            if (result is null) return;
+
+            // IMPROVED: Visa specifik felmeddelande om API returnerar null
+            if (result is null)
+            {
+                SetError(
+                    IsRemoteUrl
+                    ? "Kunde inte klona repository från GitHub. Kontrollera:\n• URL är korrekt\n• Nätverket fungerar\n• Git är installerat på servern"
+                    : "Kunde inte analysera Git-repository. Kontrollera:\n• Sökvägen är korrekt\n• Det är ett Git-repository (.git-mapp finns)\n• Du har läsbehörighet");
+                return;
+            }
 
             CurrentBranch = result.CurrentBranch;
             TotalCommits = result.TotalCommits;

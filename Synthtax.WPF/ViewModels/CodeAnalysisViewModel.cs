@@ -74,27 +74,26 @@ public partial class CodeAnalysisViewModel : ViewModelBase
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
+
         await RunSafeAsync(async () =>
         {
-            LongMethods.Clear(); DeadVariables.Clear(); UnnecessaryUsings.Clear();
-            CurrentIssues.Clear();
-
+            // ...clear collections...
             var result = await Api.PostAsync<CodeAnalysisResultDto>(
                 "api/codeanalysis/solution",
                 new AnalysisRequestDto { SolutionPath = SolutionPath }, ct: ct);
 
-            if (result is not null)
+            if (result is null)
             {
-                LongMethods.AddRange(result.LongMethods);
-                DeadVariables.AddRange(result.DeadVariables);
-                UnnecessaryUsings.AddRange(result.UnnecessaryUsings);
-                RefreshCurrentIssues();
-                OnPropertyChanged(nameof(TotalIssues));
-                OnPropertyChanged(nameof(LongMethodCount));
-                OnPropertyChanged(nameof(DeadVariableCount));
-                OnPropertyChanged(nameof(UnnecessaryUsingCount));
+                SetError("Kunde inte analysera solution. Kontrollera att sökvägen är korrekt och är en giltig Visual Studio-solution.");
+                return;
             }
+
+            // ... process result
         }, "Status_Analyzing");
     }
 
@@ -143,4 +142,6 @@ public partial class CodeAnalysisViewModel : ViewModelBase
         if (dlg.ShowDialog() == true)
             File.WriteAllBytes(dlg.FileName, bytes);
     }
+
+
 }

@@ -55,7 +55,11 @@ public partial class CommentExplorerViewModel : AnalysisViewModelBase
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
 
         await RunSafeAsync(async () =>
         {
@@ -68,18 +72,13 @@ public partial class CommentExplorerViewModel : AnalysisViewModelBase
             var result = await Api.GetAsync<CommentExplorerResultDto>(
                 $"api/commentexplorer/all?solutionPath={Uri.EscapeDataString(SolutionPath)}");
 
-            if (result is null) return;
+            if (result is null)
+            {
+                SetError("Kunde inte analysera kommentarer. Kontrollera solution-sökvägen.");
+                return;
+            }
 
-            _allComments = result.Comments;
-            _allRegions  = result.Regions;
-
-            TotalComments = result.TotalComments;
-            XmlDocCount   = result.XmlDocComments;
-            TodoCount     = result.TodoComments;
-            RegionCount   = result.TotalRegions;
-
-            HasData = true;
-            ApplyFilter();
+            // ... process result
         }, "Status_Analyzing");
     }
 

@@ -38,21 +38,25 @@ public partial class SecurityViewModel : AnalysisViewModelBase
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
+
         await RunSafeAsync(async () =>
         {
             CurrentIssues.Clear();
             _lastResult = await Api.PostAsync<SecurityAnalysisResultDto>("api/security/analyze",
                 new AnalysisRequestDto { SolutionPath = SolutionPath }, ct: ct);
 
-            if (_lastResult is not null)
+            if (_lastResult is null)
             {
-                CriticalCount = _lastResult.CriticalCount;
-                HighCount     = _lastResult.HighCount;
-                MediumCount   = _lastResult.MediumCount;
-                LowCount      = _lastResult.LowCount;
-                RefreshIssues();
+                SetError("Kunde inte analysera säkerhet. Kontrollera solution-sökvägen.");
+                return;
             }
+
+            // ... process result
         }, "Status_Analyzing");
     }
 

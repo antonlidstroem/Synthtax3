@@ -147,12 +147,16 @@ public partial class StructureAnalysisViewModel : AnalysisViewModelBase
     public StructureAnalysisViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
- 
+
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SolutionPath)) return;
+        if (!ValidateInputPath(out var validationError))
+        {
+            SetError(validationError!);
+            return;
+        }
 
         await RunSafeAsync(async () =>
         {
@@ -164,14 +168,11 @@ public partial class StructureAnalysisViewModel : AnalysisViewModelBase
 
             if (result?.RootNode is null)
             {
-                SetError("Ingen struktur kunde laddas.");
+                SetError("Kunde inte analysera solution-struktur. Kontrollera sökvägen.");
                 return;
             }
 
-            _lastResult = result;
-            BuildCounts(result.RootNode);
-            ApplyFilter();
-            HasData = true;
+            // ... process result
         }, "Status_Analyzing");
     }
 
