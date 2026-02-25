@@ -9,30 +9,26 @@ namespace Synthtax.WPF.ViewModels;
 
 public partial class CodeAnalysisViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath = string.Empty;
+    // ── BORTTAGET: private string _solutionPath och public string SolutionPath ──
+    // Den lokala egenskapen skuggade basklassens SolutionPath, vilket gjorde att
+    // SolutionInputBar uppdaterade InputPath i basklassen men AnalyzeAsync skickade
+    // alltid tom sträng till API:et. Basklassens SolutionPath används nu direkt.
+
     private bool _showLongMethods = true;
     private bool _showDeadVariables;
     private bool _showUnnecessaryUsings;
     private CodeIssueDto? _selectedIssue;
-
-    public string SolutionPath
-    {
-        get => _solutionPath;
-        set => SetProperty(ref _solutionPath, value);
-    }
 
     public bool ShowLongMethods
     {
         get => _showLongMethods;
         set { if (SetProperty(ref _showLongMethods, value)) RefreshCurrentIssues(); }
     }
-
     public bool ShowDeadVariables
     {
         get => _showDeadVariables;
         set { if (SetProperty(ref _showDeadVariables, value)) RefreshCurrentIssues(); }
     }
-
     public bool ShowUnnecessaryUsings
     {
         get => _showUnnecessaryUsings;
@@ -59,8 +55,6 @@ public partial class CodeAnalysisViewModel : AnalysisViewModelBase
     public CodeAnalysisViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    
-
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)
     {
@@ -72,7 +66,12 @@ public partial class CodeAnalysisViewModel : AnalysisViewModelBase
 
         await RunSafeAsync(async () =>
         {
-            // ...clear collections...
+            LongMethods.Clear();
+            DeadVariables.Clear();
+            UnnecessaryUsings.Clear();
+            CurrentIssues.Clear();
+
+            // SolutionPath kommer nu från basklassen (InputPath), korrekt bindning
             var result = await Api.PostAsync<CodeAnalysisResultDto>(
                 "api/codeanalysis/solution",
                 new AnalysisRequestDto { SolutionPath = SolutionPath }, ct: ct);
@@ -83,16 +82,26 @@ public partial class CodeAnalysisViewModel : AnalysisViewModelBase
                 return;
             }
 
-            // ... process result
+            // Fyll kollektionerna med resultatet
+            LongMethods.AddRange(result.LongMethods ?? new());
+            DeadVariables.AddRange(result.DeadVariables ?? new());
+            UnnecessaryUsings.AddRange(result.UnnecessaryUsings ?? new());
+
+            // Uppdatera räknare i UI
+            OnPropertyChanged(nameof(TotalIssues));
+            OnPropertyChanged(nameof(LongMethodCount));
+            OnPropertyChanged(nameof(DeadVariableCount));
+            OnPropertyChanged(nameof(UnnecessaryUsingCount));
+
+            // Visa aktiv flik
+            RefreshCurrentIssues();
+
         }, "Status_Analyzing");
     }
 
-    [RelayCommand]
-    private async Task ExportCsvAsync() => await ExportAsync("csv");
-    [RelayCommand]
-    private async Task ExportJsonAsync() => await ExportAsync("json");
-    [RelayCommand]
-    private async Task ExportPdfAsync() => await ExportAsync("pdf");
+    [RelayCommand] private async Task ExportCsvAsync() => await ExportAsync("csv");
+    [RelayCommand] private async Task ExportJsonAsync() => await ExportAsync("json");
+    [RelayCommand] private async Task ExportPdfAsync() => await ExportAsync("pdf");
 
     private async Task ExportAsync(string format)
     {
@@ -122,7 +131,7 @@ public partial class CodeAnalysisViewModel : AnalysisViewModelBase
         CurrentIssues.Clear();
         var source = ShowLongMethods ? LongMethods
                    : ShowDeadVariables ? DeadVariables
-                   : UnnecessaryUsings;
+                                         : UnnecessaryUsings;
         foreach (var item in source) CurrentIssues.Add(item);
     }
 
@@ -132,6 +141,4 @@ public partial class CodeAnalysisViewModel : AnalysisViewModelBase
         if (dlg.ShowDialog() == true)
             File.WriteAllBytes(dlg.FileName, bytes);
     }
-
-
 }
