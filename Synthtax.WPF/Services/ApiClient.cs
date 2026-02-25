@@ -17,6 +17,11 @@ public class ApiClient
     private readonly ILogger<ApiClient> _logger;
     private readonly TokenStore _tokenStore;
 
+    // FIX: Use a SemaphoreSlim instead of a plain bool flag to prevent
+    // concurrent refresh attempts. If two requests get 401 at the same time,
+    // the bool flag is not thread-safe and both would try to refresh,
+    // which revokes the first new refresh token before it's used.
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private bool _isRefreshing;
 
     public ApiClient(HttpClient http, ILogger<ApiClient> logger, TokenStore tokenStore)
@@ -28,7 +33,7 @@ public class ApiClient
         _logger.LogInformation("ApiClient initialized. BaseAddress: {BaseAddress}", _http.BaseAddress);
     }
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
+    // ── Auth ──────────────────────────────────────────────────────────────────
 
     public async Task<AuthResponseDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
     {
@@ -76,7 +81,7 @@ public class ApiClient
         }
     }
 
-    // ── Generic HTTP helpers ─────────────────────────────────────────────────
+    // ── Generic HTTP helpers ──────────────────────────────────────────────────
 
     public async Task<T?> GetAsync<T>(string url, CancellationToken ct = default)
     {
@@ -131,8 +136,13 @@ public class ApiClient
         return (bytes, contentType, fileName);
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Serializes <paramref name="body"/> to JSON and stores it as a string
+    /// so it can be re-read when the request must be retried after a token refresh.
+    /// HttpRequestMessage.Content can only be read once; we stash the raw JSON.
+    /// </summary>
     private HttpRequestMessage BuildRequest(HttpMethod method, string url,
         object? body = null, bool skipAuth = false)
     {
@@ -154,10 +164,6 @@ public class ApiClient
         return request;
     }
 
-    /// <summary>
-    /// Internal POST that returns the raw HttpResponseMessage so callers
-    /// like LoginAsync can inspect status/body before deserializing.
-    /// </summary>
     private async Task<HttpResponseMessage?> PostRawAsync(string url, object? body,
         bool skipAuth, CancellationToken ct)
     {
@@ -168,36 +174,60 @@ public class ApiClient
     private async Task<HttpResponseMessage?> SendWithRefreshAsync(
         HttpRequestMessage request, CancellationToken ct, bool skipAuth = false)
     {
+        // Capture body JSON before first send so we can replay it on retry.
+        // HttpContent can only be consumed once, so read it now.
+        string? bodyJson = null;
+        if (request.Content is not null)
+            bodyJson = await request.Content.ReadAsStringAsync(ct);
+
         try
         {
             var response = await _http.SendAsync(request, ct);
 
-            // On 401 – try to refresh token once
+            // ── 401: try to refresh the token once ────────────────────────────
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized
-                && !skipAuth && !_isRefreshing
+                && !skipAuth
                 && _tokenStore.RefreshToken is not null)
             {
-                _isRefreshing = true;
+                // FIX: Use a semaphore so only one concurrent refresh runs.
+                // With the old bool flag, two simultaneous 401s both entered
+                // the refresh block, the second revoked the first new token.
+                await _refreshLock.WaitAsync(ct);
                 try
                 {
-                    var refreshed = await TryRefreshTokenAsync(ct);
-                    if (refreshed)
+                    if (!_isRefreshing)
                     {
-                        var retryRequest = BuildRequest(request.Method,
-                            request.RequestUri!.ToString());
+                        _isRefreshing = true;
+                        var refreshed = await TryRefreshTokenAsync(ct);
 
-                        if (request.Content is StringContent sc)
-                            retryRequest.Content = new StringContent(
-                                await sc.ReadAsStringAsync(ct), Encoding.UTF8, "application/json");
+                        if (refreshed)
+                        {
+                            // Rebuild the request with the NEW access token and original body.
+                            // FIX: The old code tried to read request.Content.ReadAsStringAsync
+                            // AFTER it had already been sent, which returns empty string because
+                            // the stream is exhausted. We now use the bodyJson captured above.
+                            var retry = new HttpRequestMessage(request.Method,
+                                request.RequestUri!.ToString());
 
-                        return await _http.SendAsync(retryRequest, ct);
+                            retry.Headers.Authorization =
+                                new AuthenticationHeaderValue("Bearer", _tokenStore.AccessToken);
+
+                            if (bodyJson is not null)
+                                retry.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+
+                            _isRefreshing = false;
+                            return await _http.SendAsync(retry, ct);
+                        }
+
+                        _isRefreshing = false;
                     }
                 }
                 finally
                 {
-                    _isRefreshing = false;
+                    _refreshLock.Release();
                 }
 
+                // Refresh failed – session is dead.
                 _tokenStore.Clear();
                 SessionExpired?.Invoke(this, EventArgs.Empty);
             }
@@ -206,7 +236,6 @@ public class ApiClient
         }
         catch (HttpRequestException ex)
         {
-            // Nätverksfel – API är troligen nere eller BaseAddress är fel
             _logger.LogError(ex,
                 "Network error sending {Method} {Url}. " +
                 "Check that the API is running and that BaseAddress ({BaseAddress}) is correct.",
@@ -215,7 +244,8 @@ public class ApiClient
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            _logger.LogError(ex, "Request timed out: {Method} {Url}", request.Method, request.RequestUri);
+            _logger.LogError(ex, "Request timed out: {Method} {Url}",
+                request.Method, request.RequestUri);
             return null;
         }
         catch (Exception ex)
@@ -230,15 +260,21 @@ public class ApiClient
     {
         try
         {
-            var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "api/auth/refresh");
             var body = JsonConvert.SerializeObject(
                 new RefreshTokenDto { RefreshToken = _tokenStore.RefreshToken! });
-            refreshRequest.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
+            var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "api/auth/refresh")
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+
+            // NOTE: No Authorization header – refresh is an anonymous endpoint.
             var response = await _http.SendAsync(refreshRequest, ct);
+
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Token refresh failed with status {StatusCode}", response.StatusCode);
+                _logger.LogWarning("Token refresh failed with status {StatusCode}",
+                    response.StatusCode);
                 return false;
             }
 
@@ -249,6 +285,8 @@ public class ApiClient
             _tokenStore.AccessToken = auth.AccessToken;
             _tokenStore.RefreshToken = auth.RefreshToken;
             _tokenStore.CurrentUser = auth.User;
+
+            _logger.LogInformation("Token refreshed successfully.");
             return true;
         }
         catch (Exception ex)
@@ -282,6 +320,6 @@ public class ApiClient
         }
     }
 
-    /// <summary>Raised when a session expires and can't be refreshed.</summary>
+    /// <summary>Raised when a session expires and cannot be refreshed.</summary>
     public event EventHandler? SessionExpired;
 }

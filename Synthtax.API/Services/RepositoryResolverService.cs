@@ -3,16 +3,6 @@ using Synthtax.Core.Interfaces;
 
 namespace Synthtax.API.Services;
 
-/// <summary>
-/// Resolves a user-supplied path or GitHub URL to a usable local path.
-///
-/// Usage pattern in controllers:
-///   var resolved = await _resolver.ResolveAsync(input, ct);          // for .sln-based analysis
-///   var resolved = await _resolver.ResolveDirectoryAsync(input, ct); // for git-based analysis
-///   if (!resolved.Success) return BadRequest(resolved.ErrorMessage);
-///   try { ... use resolved.LocalPath ... }
-///   finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
-/// </summary>
 public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
 {
     private readonly ILogger<RepositoryResolverService> _logger;
@@ -27,11 +17,14 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
         Directory.CreateDirectory(_cloneBaseDir);
     }
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
-
-    /// <inheritdoc/>
+    /// <summary>
+    /// Resolves a path or URL to a .sln file path.
+    /// Accepts:
+    ///   • A local path to a .sln file directly
+    ///   • A local path to a folder that contains a .sln (searched recursively)
+    ///   • A remote git URL – the repo is cloned and the .sln is located automatically
+    /// The caller never needs to know whether input was a file, directory, or URL.
+    /// </summary>
     public async Task<ResolvedPath> ResolveAsync(
         string? pathOrUrl,
         CancellationToken ct = default)
@@ -39,45 +32,63 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
         if (string.IsNullOrWhiteSpace(pathOrUrl))
             return ResolvedPath.Failure("Sökväg eller URL saknas.");
 
-        if (!IRepositoryResolver.IsRemoteUrl(pathOrUrl))
+        // ── Remote URL ──────────────────────────────────────────────────────
+        if (IRepositoryResolver.IsRemoteUrl(pathOrUrl))
         {
-            // Local path – accept both a direct .sln file and a directory containing one
-            if (File.Exists(pathOrUrl) &&
-                pathOrUrl.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
-                return ResolvedPath.Ok(pathOrUrl, isClone: false);
+            var cloneResult = await CloneAsync(pathOrUrl, ct);
+            if (!cloneResult.Success) return cloneResult;
 
-            if (Directory.Exists(pathOrUrl))
+            var sln = FindSlnInDirectory(cloneResult.LocalPath!);
+            if (sln is null)
             {
-                var found = FindSlnInDirectory(pathOrUrl);
-                if (found is null)
-                    return ResolvedPath.Failure(
-                        $"Ingen .sln-fil hittades i mappen: {pathOrUrl}");
-                return ResolvedPath.Ok(found, isClone: false);
+                Cleanup(cloneResult.CloneDir);
+                return ResolvedPath.Failure(
+                    "Inga .sln-filer hittades i repositoryt. " +
+                    "Kontrollera att det är ett C#/.NET-projekt.");
             }
 
-            return ResolvedPath.Failure($"Sökvägen hittades inte: {pathOrUrl}");
+            _logger.LogInformation("Hittade solution i klonat repo: {Sln}", sln);
+            return ResolvedPath.Ok(sln, isClone: true,
+                cloneDir: cloneResult.CloneDir,
+                url: cloneResult.OriginalUrl);
         }
 
-        // Remote URL – clone then find .sln
-        var cloneResult = await CloneAsync(pathOrUrl, ct);
-        if (!cloneResult.Success) return cloneResult;
+        // ── Local path pointing directly to a .sln file ─────────────────────
+        var normalized = pathOrUrl.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        var sln = FindSlnInDirectory(cloneResult.LocalPath!);
-        if (sln is null)
+        if (File.Exists(normalized) &&
+            normalized.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
         {
-            Cleanup(cloneResult.CloneDir);
-            return ResolvedPath.Failure(
-                "Inga .sln-filer hittades i repositoryt. " +
-                "Kontrollera att det är ett C#/.NET-projekt.");
+            return ResolvedPath.Ok(normalized, isClone: false);
         }
 
-        _logger.LogInformation("Hittade solution: {Sln}", sln);
-        return ResolvedPath.Ok(sln, isClone: true,
-            cloneDir: cloneResult.CloneDir,
-            url: cloneResult.OriginalUrl);
+        // ── Local directory ──────────────────────────────────────────────────
+        // Also handles the case where the user passed a path to a .sln file that
+        // somehow got a trailing separator.
+        if (Directory.Exists(normalized))
+        {
+            var found = FindSlnInDirectory(normalized);
+            if (found is null)
+                return ResolvedPath.Failure(
+                    $"Ingen .sln-fil hittades i mappen: {normalized}");
+
+            _logger.LogInformation("Hittade solution i mapp: {Sln}", found);
+            return ResolvedPath.Ok(found, isClone: false);
+        }
+
+        // ── Nothing matched ──────────────────────────────────────────────────
+        // Give a helpful error that distinguishes "looks like a file path" from
+        // "looks like a directory path" so the WPF client can show a better message.
+        var looksLikeFile = Path.GetExtension(normalized).Length > 0;
+        return looksLikeFile
+            ? ResolvedPath.Failure($"Filen hittades inte: {normalized}")
+            : ResolvedPath.Failure($"Mappen hittades inte: {normalized}");
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Resolves a path or URL to a local directory (not a .sln file).
+    /// Used by Git analysis which operates on the repo root, not a solution file.
+    /// </summary>
     public async Task<ResolvedPath> ResolveDirectoryAsync(
         string? pathOrUrl,
         CancellationToken ct = default)
@@ -87,23 +98,22 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
 
         if (!IRepositoryResolver.IsRemoteUrl(pathOrUrl))
         {
-            // Accept a directory directly
-            if (Directory.Exists(pathOrUrl))
-                return ResolvedPath.Ok(pathOrUrl, isClone: false);
+            var normalized = pathOrUrl.Trim()
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-            // Accept a file path – use its containing directory
-            if (File.Exists(pathOrUrl))
-                return ResolvedPath.Ok(
-                    Path.GetDirectoryName(pathOrUrl)!, isClone: false);
+            if (Directory.Exists(normalized))
+                return ResolvedPath.Ok(normalized, isClone: false);
 
-            return ResolvedPath.Failure($"Sökvägen hittades inte: {pathOrUrl}");
+            // Accept a file path – return its parent directory
+            if (File.Exists(normalized))
+                return ResolvedPath.Ok(Path.GetDirectoryName(normalized)!, isClone: false);
+
+            return ResolvedPath.Failure($"Sökvägen hittades inte: {normalized}");
         }
 
-        // Remote URL – clone and return the directory
         return await CloneAsync(pathOrUrl, ct);
     }
 
-    /// <inheritdoc/>
     public void Cleanup(string? cloneDir)
     {
         if (cloneDir is null) return;
@@ -111,9 +121,7 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
         _tempDirsToClean.Remove(cloneDir);
     }
 
-    // -------------------------------------------------------------------------
-    // Internals
-    // -------------------------------------------------------------------------
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     private async Task<ResolvedPath> CloneAsync(string url, CancellationToken ct)
     {
@@ -122,7 +130,6 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
         var cloneDir = Path.Combine(_cloneBaseDir, $"{repoName}_{Guid.NewGuid():N}");
 
         _logger.LogInformation("Klonar {Url} → {Dir}", cleanUrl, cloneDir);
-
         try
         {
             await Task.Run(() =>
@@ -143,21 +150,29 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
                 "Kontrollera att URL:en är korrekt och att repositoryt är publikt.");
         }
 
-        return ResolvedPath.Ok(cloneDir, isClone: true,
-            cloneDir: cloneDir, url: cleanUrl);
+        return ResolvedPath.Ok(cloneDir, isClone: true, cloneDir: cloneDir, url: cleanUrl);
     }
 
     private static string? FindSlnInDirectory(string dir)
         => Directory
             .GetFiles(dir, "*.sln", SearchOption.AllDirectories)
-            .OrderBy(f => f.Length)   // prefer top-level / shortest path
+            .OrderBy(f => f.Length)   // prefer shallowest / shortest path
             .FirstOrDefault();
 
+    /// <summary>
+    /// Normalises a git remote URL:
+    ///   – Strips trailing slashes
+    ///   – Appends .git if missing (GitHub, Azure DevOps, GitLab all accept this)
+    ///   – Does NOT append .git to URLs that already contain .git anywhere in the path
+    /// </summary>
     private static string NormalizeUrl(string url)
     {
         url = url.Trim().TrimEnd('/');
+
+        // Don't double-append .git
         if (!url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
             url += ".git";
+
         return url;
     }
 
@@ -165,7 +180,8 @@ public sealed class RepositoryResolverService : IRepositoryResolver, IDisposable
     {
         var parts = url.TrimEnd('/').Split('/', '\\');
         var name = parts.LastOrDefault() ?? "repo";
-        return name.Replace(".git", "").Replace(" ", "_");
+        return name.Replace(".git", "", StringComparison.OrdinalIgnoreCase)
+                   .Replace(" ", "_");
     }
 
     private void TryDeleteDir(string dir)

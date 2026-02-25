@@ -7,15 +7,10 @@ using System.Text.RegularExpressions;
 
 namespace Synthtax.API.Services.Analysis;
 
-/// <summary>
-/// Heuristisk AI-detektering baserad på kodmönster typiska för AI-genererad C#-kod.
-/// OBS: Experimentell funktion – falska positiver förekommer.
-/// </summary>
 public class AIDetectionService : IAIDetectionService
 {
     private readonly ILogger<AIDetectionService> _logger;
 
-    // Phrases extremely common in AI-generated XML doc comments
     private static readonly string[] AiDocPhrases =
     {
         "Gets or sets", "Represents a", "Initializes a new instance",
@@ -24,17 +19,14 @@ public class AIDetectionService : IAIDetectionService
         "Returns the", "Determines whether"
     };
 
-    // Over-engineered variable / method naming patterns AI tends to produce
     private static readonly Regex AiNamingPattern = new(
         @"\b(result|response|data|output|returnValue|finalResult|processedData|executionResult)\b",
         RegexOptions.Compiled);
 
-    // AI tends to add redundant null checks like: if (x == null) throw new ArgumentNullException(nameof(x));
     private static readonly Regex NullGuardPattern = new(
         @"if\s*\(\s*\w+\s*==\s*null\s*\)\s*(throw|return)",
         RegexOptions.Compiled | RegexOptions.Multiline);
 
-    // AI tends to comment every brace closing: // end if, // end for
     private static readonly Regex ClosingBraceCommentPattern = new(
         @"}\s*//\s*(end|close|endif|endfor|endwhile|endtry)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -49,7 +41,6 @@ public class AIDetectionService : IAIDetectionService
         CancellationToken cancellationToken = default)
     {
         var result = new AIDetectionResultDto { SolutionPath = solutionPath };
-
         try
         {
             var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
@@ -78,7 +69,6 @@ public class AIDetectionService : IAIDetectionService
             _logger.LogError(ex, "AI detection error for {Path}", solutionPath);
             result.Errors.Add($"AI detection error: {ex.Message}");
         }
-
         return result;
     }
 
@@ -101,7 +91,13 @@ public class AIDetectionService : IAIDetectionService
         return ScoreFile(root, code, virtualFileName, virtualFileName);
     }
 
-    // ── Private Helpers ──────────────────────────────────────────────────────
+    // FIX: was throwing NotImplementedException, now delegates to AnalyzeCodeTextAsync
+    // which is the same logic the /code endpoint uses.
+    public Task<AIDetectionFileResultDto> AnalyzeCodeAsync(
+        string code,
+        string fileName,
+        CancellationToken cancellationToken)
+        => AnalyzeCodeTextAsync(code, fileName, cancellationToken);
 
     private static async Task<AIDetectionFileResultDto> AnalyzeDocumentAsync(
         Document doc, CancellationToken cancellationToken)
@@ -122,11 +118,13 @@ public class AIDetectionService : IAIDetectionService
         if (totalLines < 5)
             return new AIDetectionFileResultDto
             {
-                FilePath = filePath, FileName = fileName,
-                AILikelihoodScore = 0, Verdict = "Unlikely"
+                FilePath = filePath,
+                FileName = fileName,
+                AILikelihoodScore = 0,
+                Verdict = "Unlikely"
             };
 
-        // ── Signal 1: XML doc comment saturation ──────────────────────────
+        // Signal: high XML-doc density
         var xmlDocLines = lines.Count(l => l.TrimStart().StartsWith("///"));
         var docRatio = (double)xmlDocLines / totalLines;
         if (docRatio > 0.25)
@@ -140,7 +138,7 @@ public class AIDetectionService : IAIDetectionService
             });
         }
 
-        // ── Signal 2: AI doc phrases ──────────────────────────────────────
+        // Signal: common AI doc phrases
         var docPhrasesFound = AiDocPhrases.Count(p =>
             code.Contains(p, StringComparison.OrdinalIgnoreCase));
         if (docPhrasesFound >= 3)
@@ -157,7 +155,7 @@ public class AIDetectionService : IAIDetectionService
             });
         }
 
-        // ── Signal 3: Generic variable naming ────────────────────────────
+        // Signal: generic variable names
         var namingMatches = AiNamingPattern.Matches(code).Count;
         var methodCount = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Count() ?? 1;
         var namingRatio = methodCount > 0 ? (double)namingMatches / methodCount : 0;
@@ -172,7 +170,7 @@ public class AIDetectionService : IAIDetectionService
             });
         }
 
-        // ── Signal 4: Excessive null guard pattern ────────────────────────
+        // Signal: excessive null guards
         var nullGuards = NullGuardPattern.Matches(code).Count;
         if (methodCount > 0 && (double)nullGuards / methodCount > 2.0)
         {
@@ -185,7 +183,7 @@ public class AIDetectionService : IAIDetectionService
             });
         }
 
-        // ── Signal 5: Closing brace comments ─────────────────────────────
+        // Signal: closing-brace comments
         var closingComments = ClosingBraceCommentPattern.Matches(code).Count;
         if (closingComments > 0)
         {
@@ -198,7 +196,7 @@ public class AIDetectionService : IAIDetectionService
             });
         }
 
-        // ── Signal 6: Every public member has XML doc ─────────────────────
+        // Signal: near-100% XML doc coverage on public members
         if (root is not null)
         {
             var publicMembers = root.DescendantNodes()
@@ -227,7 +225,7 @@ public class AIDetectionService : IAIDetectionService
             }
         }
 
-        // ── Signal 7: Consistent formatting uniformity ────────────────────
+        // Signal: perfectly consistent 4-space indentation
         var indentLengths = lines
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .Select(l => l.Length - l.TrimStart().Length)
@@ -249,7 +247,6 @@ public class AIDetectionService : IAIDetectionService
             }
         }
 
-        // ── Compute final score ───────────────────────────────────────────
         var rawScore = signals.Sum(s => s.Weight);
         var finalScore = Math.Clamp(rawScore, 0.0, 1.0);
 
@@ -270,9 +267,4 @@ public class AIDetectionService : IAIDetectionService
         < 0.65 => "Probable",
         _ => "Likely"
     };
-
-    public Task<AIDetectionFileResultDto> AnalyzeCodeAsync(string code, string fileName, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
 }
