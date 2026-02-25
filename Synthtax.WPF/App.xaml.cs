@@ -38,8 +38,14 @@ public partial class App : Application
 
     private void OnLoginSucceeded(object? sender, EventArgs e)
     {
+        var mainWindow = new MainWindow(_services!);
+
+            Application.Current.MainWindow = MainWindow;
+
+        mainWindow.Show();
+
         if (sender is Window w) w.Close();
-        new MainWindow(_services!).Show();
+        
     }
 
     private static IServiceProvider BuildServiceProvider()
