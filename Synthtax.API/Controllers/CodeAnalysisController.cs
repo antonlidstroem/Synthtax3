@@ -12,23 +12,23 @@ namespace Synthtax.API.Controllers;
 [Produces("application/json")]
 public class CodeAnalysisController : ControllerBase
 {
-    private readonly ICodeAnalysisService _analysisService;
+    private readonly ICodeAnalysisService _codeAnalysisService;
     private readonly RepositoryResolverService _resolver;
     private readonly ILogger<CodeAnalysisController> _logger;
 
     public CodeAnalysisController(
-        ICodeAnalysisService analysisService,
+        ICodeAnalysisService codeAnalysisService,
         RepositoryResolverService resolver,
         ILogger<CodeAnalysisController> logger)
     {
-        _analysisService = analysisService;
+        _codeAnalysisService = codeAnalysisService;
         _resolver = resolver;
         _logger = logger;
     }
 
     /// <summary>
-    /// Analyserar en hel solution med Roslyn.
-    /// Accepterar lokal .sln-sökväg ELLER GitHub/GitLab-URL i SolutionPath.
+    /// Analyserar en hel solution. Accepterar lokal .sln-sökväg, lokal mapp
+    /// eller en GitHub-URL (https://github.com/user/repo).
     /// </summary>
     [HttpPost("solution")]
     [ProducesResponseType(typeof(CodeAnalysisResultDto), StatusCodes.Status200OK)]
@@ -42,17 +42,21 @@ public class CodeAnalysisController : ControllerBase
             return BadRequest(new { Message = resolved.ErrorMessage });
 
         _logger.LogInformation("Code analysis: {Path}", resolved.LocalPath);
-
         try
         {
-            var result = await _analysisService.AnalyzeSolutionAsync(
+            var result = await _codeAnalysisService.AnalyzeSolutionAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Analyserar ett enskilt projekt (.csproj).</summary>
+    /// <summary>
+    /// Analyserar ett enskilt projekt (.csproj).
+    /// </summary>
     [HttpPost("project")]
     [ProducesResponseType(typeof(CodeAnalysisResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -61,34 +65,45 @@ public class CodeAnalysisController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.ProjectPath))
-            return BadRequest(new { Message = "ProjectPath is required." });
+            return BadRequest(new { Message = "ProjectPath saknas." });
 
-        var result = await _analysisService.AnalyzeProjectAsync(
+        if (!System.IO.File.Exists(request.ProjectPath))
+            return NotFound(new { Message = $"Projektfilen hittades inte: {request.ProjectPath}" });
+
+        var result = await _codeAnalysisService.AnalyzeProjectAsync(
             request.ProjectPath, cancellationToken);
         return Ok(result);
     }
 
-    /// <summary>Söker efter långa metoder.</summary>
+    /// <summary>
+    /// Hittar långa metoder. Accepterar lokal .sln-sökväg eller GitHub-URL.
+    /// </summary>
     [HttpGet("long-methods")]
     [ProducesResponseType(typeof(List<CodeIssueDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> FindLongMethods(
         [FromQuery] string solutionPath,
-        [FromQuery] int threshold = 100,
+        [FromQuery] int maxLines = 50,
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _analysisService.FindLongMethodsAsync(
-                resolved.LocalPath!, threshold, cancellationToken);
+            var result = await _codeAnalysisService.FindLongMethodsAsync(
+                resolved.LocalPath!, maxLines, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Söker efter oanvända variabler.</summary>
+    /// <summary>
+    /// Hittar oanvända (döda) variabler. Accepterar lokal .sln-sökväg eller GitHub-URL.
+    /// </summary>
     [HttpGet("dead-variables")]
     [ProducesResponseType(typeof(List<CodeIssueDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> FindDeadVariables(
@@ -96,18 +111,24 @@ public class CodeAnalysisController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _analysisService.FindDeadVariablesAsync(
+            var result = await _codeAnalysisService.FindDeadVariablesAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Söker efter onödiga using-satser.</summary>
+    /// <summary>
+    /// Hittar onödiga using-direktiv. Accepterar lokal .sln-sökväg eller GitHub-URL.
+    /// </summary>
     [HttpGet("unnecessary-usings")]
     [ProducesResponseType(typeof(List<CodeIssueDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> FindUnnecessaryUsings(
@@ -115,14 +136,18 @@ public class CodeAnalysisController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _analysisService.FindUnnecessaryUsingsAsync(
+            var result = await _codeAnalysisService.FindUnnecessaryUsingsAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 }

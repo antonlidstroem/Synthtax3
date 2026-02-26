@@ -7,38 +7,38 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <!-- SolutionInputBar -->
             <RowDefinition Height="Auto"/>
+            <!-- MaxCommits row -->
+            <RowDefinition Height="Auto"/>
+            <!-- Stats -->
             <RowDefinition Height="*"/>
+            <!-- Tabs + grid -->
         </Grid.RowDefinitions>
 
+        <!-- Title -->
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
             <TextBlock Style="{StaticResource PageTitle}" Text="Git-analys"/>
             <TextBlock Text="Commits, brancher, fil-churn och bus factor via LibGit2Sharp."
                        Foreground="{StaticResource TextSecondaryBrush}" FontSize="13"/>
         </StackPanel>
 
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding RepositoryPath, UpdateSourceTrigger=PropertyChanged}"
-                         Margin="0,0,10,0" ToolTip="Sökväg till Git-repo"/>
-                <ComboBox Grid.Column="1" Width="100" Margin="0,0,8,0"
+        <!-- ── Inmatning (delad kontroll) ────────────────────────────── -->
+        <ctrls:SolutionInputBar Grid.Row="1"/>
+
+        <!-- MaxCommits (Git-specifikt tillägg under inputbaren) -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,-8,0,16" Padding="12,8">
+            <ctrls:SpacedStackPanel Orientation="Horizontal">
+                <TextBlock Text="Max commits:" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                <ComboBox Width="90"
                           SelectedItem="{Binding MaxCommits}"
                           ItemsSource="{Binding CommitLimits}"/>
-                <Button Grid.Column="2" Style="{StaticResource SecondaryButton}"
-                        Content="Bläddra..." Margin="0,0,8,0" Command="{Binding BrowseCommand}"/>
-                <Button Grid.Column="3" Style="{StaticResource PrimaryButton}"
-                        Content="Analysera" MinWidth="110" Command="{Binding AnalyzeCommand}"/>
-            </Grid>
+            </ctrls:SpacedStackPanel>
         </Border>
 
         <!-- Summary stats -->
-        <Grid Grid.Row="2" Margin="0,0,0,16">
+        <Grid Grid.Row="3" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -68,31 +68,34 @@
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionHeader}" Text="AKTIV BRANCH"/>
                     <TextBlock Text="{Binding CurrentBranch}" FontSize="16" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
             </Border>
         </Grid>
 
-        <!-- Tabs for commits / churn / bus factor -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+        <!-- Tabs + commit table -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <ctrls:SpacedStackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12" >
-                    <RadioButton Content="Commits"      IsChecked="{Binding ShowCommits}"   GroupName="gitTabs"/>
-                    <RadioButton Content="Fil-churn"    IsChecked="{Binding ShowChurn}"     GroupName="gitTabs"/>
-                    <RadioButton Content="Bus Factor"   IsChecked="{Binding ShowBusFactor}" GroupName="gitTabs"/>
-                    <RadioButton Content="Brancher"     IsChecked="{Binding ShowBranches}"  GroupName="gitTabs"/>
+                <ctrls:SpacedStackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12">
+                    <RadioButton Content="Commits"    IsChecked="{Binding ShowCommits}"   GroupName="gitTabs"/>
+                    <RadioButton Content="Fil-churn"  IsChecked="{Binding ShowChurn}"     GroupName="gitTabs"/>
+                    <RadioButton Content="Bus Factor" IsChecked="{Binding ShowBusFactor}" GroupName="gitTabs"/>
+                    <RadioButton Content="Brancher"   IsChecked="{Binding ShowBranches}"  GroupName="gitTabs"/>
                 </ctrls:SpacedStackPanel>
                 <DataGrid Grid.Row="1" ItemsSource="{Binding CurrentRows}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="SHA"         Binding="{Binding ShortSha}"    Width="80"/>
-                        <DataGridTextColumn Header="Författare"  Binding="{Binding AuthorName}"  Width="140"/>
-                        <DataGridTextColumn Header="Datum"       Binding="{Binding AuthoredAt, Converter={StaticResource DateTimeFormat}}" Width="130"/>
-                        <DataGridTextColumn Header="Meddelande"  Binding="{Binding Message}"     Width="*"/>
-                        <DataGridTextColumn Header="+/-"         Binding="{Binding ChangeSummary}" Width="80"/>
+                        <DataGridTextColumn Header="SHA"        Binding="{Binding ShortSha}"      Width="80"/>
+                        <DataGridTextColumn Header="Författare" Binding="{Binding AuthorName}"    Width="140"/>
+                        <DataGridTextColumn Header="Datum"
+                                            Binding="{Binding AuthoredAt, Converter={StaticResource DateTimeFormat}}"
+                                            Width="130"/>
+                        <DataGridTextColumn Header="Meddelande" Binding="{Binding Message}"       Width="*"/>
+                        <DataGridTextColumn Header="+/-"        Binding="{Binding ChangeSummary}" Width="80"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>
