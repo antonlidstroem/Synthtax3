@@ -9,6 +9,10 @@ public class FileMetricsDto
     public int LinesOfComments { get; set; }
     public int BlankLines { get; set; }
     public double AverageCyclomaticComplexity { get; set; }
+
+    /// <summary>NEW: Sonar-style cognitive complexity average across all methods.</summary>
+    public double AverageCognitiveComplexity { get; set; }
+
     public double MaintainabilityIndex { get; set; }
     public int NumberOfMethods { get; set; }
     public int NumberOfClasses { get; set; }
@@ -22,6 +26,10 @@ public class MethodMetricsDto
     public int LineNumber { get; set; }
     public int LinesOfCode { get; set; }
     public int CyclomaticComplexity { get; set; }
+
+    /// <summary>NEW: Cognitive complexity for this method.</summary>
+    public int CognitiveComplexity { get; set; }
+
     public double MaintainabilityIndex { get; set; }
 }
 
@@ -40,6 +48,10 @@ public class MetricsResultDto
     public int TotalLinesOfCode { get; set; }
     public double OverallMaintainabilityIndex { get; set; }
     public double OverallCyclomaticComplexity { get; set; }
+
+    /// <summary>NEW: Overall cognitive complexity average.</summary>
+    public double OverallCognitiveComplexity { get; set; }
+
     public int TotalFiles { get; set; }
     public int TotalMethods { get; set; }
     public List<FileMetricsDto> Files { get; set; } = new();
