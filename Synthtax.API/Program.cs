@@ -56,6 +56,8 @@ builder.Services.AddAnalysisServices(); // Roslyn + analysis engine
 
 var app = builder.Build();
 
+await Synthtax.Infrastructure.CacheDbInitializer.InitializeAsync(app.Services);
+
 await DbSeeder.SeedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())

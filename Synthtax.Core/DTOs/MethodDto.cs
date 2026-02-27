@@ -11,7 +11,14 @@ public class MethodDto
     public int StartLine { get; set; }
     public int EndLine { get; set; }
     public int LinesOfCode { get; set; }
+
+    // Existing: Cyclomatic Complexity
     public int CyclomaticComplexity { get; set; }
+
+    // NEW: Cognitive Complexity (nullable for backward compatibility)
+    // null = not yet calculated; populated when using SemanticCodeAnalysisService
+    public int? CognitiveComplexity { get; set; }
+
     public string ReturnType { get; set; } = string.Empty;
     public List<string> Parameters { get; set; } = new();
     public List<string> Modifiers { get; set; } = new();
@@ -19,13 +26,4 @@ public class MethodDto
     public bool IsStatic { get; set; }
     public bool IsPublic { get; set; }
     public string? XmlDocSummary { get; set; }
-}
-
-public class MethodExplorerResultDto
-{
-    public string SolutionPath { get; set; } = string.Empty;
-    public DateTime AnalyzedAt { get; set; } = DateTime.UtcNow;
-    public int TotalMethods { get; set; }
-    public List<MethodDto> Methods { get; set; } = new();
-    public List<string> Errors { get; set; } = new();
 }

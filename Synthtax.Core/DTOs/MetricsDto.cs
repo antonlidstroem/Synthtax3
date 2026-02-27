@@ -25,13 +25,20 @@ public class MethodMetricsDto
     public string ClassName { get; set; } = string.Empty;
     public int LineNumber { get; set; }
     public int LinesOfCode { get; set; }
+
+    // Existing: Cyclomatic Complexity
     public int CyclomaticComplexity { get; set; }
 
-    /// <summary>NEW: Cognitive complexity for this method.</summary>
-    public int CognitiveComplexity { get; set; }
+    // NEW: Cognitive Complexity (nullable for backward compatibility)
+    public int? CognitiveComplexity { get; set; }
 
     public double MaintainabilityIndex { get; set; }
 }
+
+
+
+
+
 
 public class MetricsTrendPointDto
 {

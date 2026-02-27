@@ -7,8 +7,6 @@ using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Repositories;
 
-
-
 namespace Synthtax.Infrastructure;
 
 public static class InfrastructureServiceExtensions
@@ -17,7 +15,7 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // ── DbContext ─────────────────────────────────────────────────────
+        // ── Main SQL Server database (unchanged) ─────────────────────────────
         services.AddDbContext<SynthtaxDbContext>(options =>
         {
             options.UseSqlServer(
@@ -30,43 +28,33 @@ public static class InfrastructureServiceExtensions
                         maxRetryDelay: TimeSpan.FromSeconds(30),
                         errorNumbersToAdd: null);
                 });
-
-            // Visa SQL i development
             if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
                 options.EnableSensitiveDataLogging().EnableDetailedErrors();
         });
 
-        // ── ASP.NET Core Identity ─────────────────────────────────────────
-        //services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-        //{
-        //    // Lösenordspolicy
-        //    options.Password.RequireDigit = true;
-        //    options.Password.RequireLowercase = true;
-        //    options.Password.RequireUppercase = true;
-        //    options.Password.RequireNonAlphanumeric = true;
-        //    options.Password.RequiredLength = 8;
+        // ── NEW: SQLite analysis cache database ──────────────────────────────
+        // Stored in a configurable path; defaults to the app's data directory.
+        var cachePath = configuration["AnalysisCache:DatabasePath"]
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Synthtax",
+                "analysis-cache.db");
 
-        //    // Låsningspolicy
-        //    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        //    options.Lockout.MaxFailedAccessAttempts = 5;
-        //    options.Lockout.AllowedForNewUsers = true;
+        // Ensure directory exists
+        var cacheDir = Path.GetDirectoryName(cachePath)!;
+        Directory.CreateDirectory(cacheDir);
 
-        //    // Användarpolicy
-        //    options.User.RequireUniqueEmail = true;
-        //    options.SignIn.RequireConfirmedEmail = false; // Enklare onboarding i v1
-        //})
-        //.AddEntityFrameworkStores<SynthtaxDbContext>()
-        //.AddDefaultTokenProviders();
+        services.AddDbContext<AnalysisCacheDbContext>(options =>
+        {
+            options.UseSqlite($"Data Source={cachePath}");
+        });
 
-        
+        services.AddScoped<IAnalysisCacheService, AnalysisCacheRepository>();
 
-
-        // ── Repositories ─────────────────────────────────────────────────
+        // ── Existing repositories (unchanged) ────────────────────────────────
         services.AddScoped<IBacklogRepository, BacklogRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<UserRepository>();
-
-        // Generiska repositories (registreras öppet generiskt)
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 
         return services;
