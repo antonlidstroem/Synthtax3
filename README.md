@@ -1,191 +1,151 @@
-# **Synthtax — C# Code Intelligence Tool**
-
-**Synthtax** is an extensible code intelligence platform for C# developers. It provides deep programmatic analysis through Roslyn, project metrics, security scanning, Git history exploration, backlog management, and a desktop UI client. The architecture separates a rich ASP.NET Core API from a WPF front-end, and supports modern authentication, role-based access control, and export capabilities. ([GitHub][1])
-
----
-
-## 🚀 **Key Features**
-
-* 🧠 Static code analysis with Roslyn
-* 📊 Metrics: lines of code, cyclomatic complexity, maintenance index
-* 🔐 Security scanning (SQL injection, insecure constructs)
-* 📈 Git history insights (churn, bus factor, commit trends)
-* 🗂 Solution structure browsing
-* 🧩 Method & comment exploration
-* 🤖 Heuristic AI code detection
-* 📌 Backlog item management API
-* 📄 CSV/JSON/PDF export
-* 🔐 JWT auth + role-based access control
-* 🪟 WPF desktop client with MVVM UI ([GitHub][1])
+Bra — då kör vi på den stilen 👍
+Här får du den första versionen omskriven som **sammanhängande, färdig README**, utan GitHub-citatreferenser och utan uppdelning i separata block.
 
 ---
 
-## 📦 **Architecture Overview**
+# Synthtax — C# Code Intelligence Tool
 
-```
-Synthtax.WPF          (Desktop client – C# WPF)
-   ↕
-Synthtax.API          (ASP.NET Core 8 – backend services)
-   ↕
-Synthtax.Infrastructure (EF Core, Identity, Repositories)
-   ↕
-Synthtax.Core          (DTOs, interfaces, enums)
-```
+**Synthtax** is an extensible code intelligence platform for C# developers. It provides deep, programmatic analysis of .NET solutions using Roslyn, combined with project metrics, security scanning, Git history insights, backlog management, and a desktop client. The system is built with a clear separation between a modern ASP.NET Core API and a WPF front-end, and includes JWT authentication with role-based access control.
 
-* The API handles code analysis, security scanning, Git analysis, and more.
-* Infrastructure manages persistence, identity, and domain models.
-* The WPF client offers interactive UI with token-based login. ([GitHub][1])
+The purpose of Synthtax is straightforward: help developers better understand their codebases. Whether you're exploring a legacy solution, evaluating architectural quality, identifying risky patterns, or reviewing team contribution patterns, Synthtax provides structured, actionable insights.
 
 ---
 
-## 🛠 **Requirements**
+## Architecture Overview
+
+The solution is divided into four main projects:
+
+* **Synthtax.API** – ASP.NET Core 8 backend exposing analysis and management endpoints
+* **Synthtax.Core** – Shared interfaces, DTOs, enums, and contracts
+* **Synthtax.Infrastructure** – Entity Framework Core, Identity, repositories, and persistence
+* **Synthtax.WPF** – Windows desktop client built with MVVM
+
+The API contains the analysis engine and business logic. Infrastructure handles data access and authentication. Core ensures separation of concerns via clean interfaces. The WPF client provides a user-friendly interface for interacting with the system.
+
+This layered structure keeps responsibilities clear and makes the analysis engine reusable independently of the UI.
+
+---
+
+## Key Features
+
+Synthtax includes:
+
+* Static code analysis powered by Roslyn
+* Code metrics (lines of code, cyclomatic complexity, maintenance indicators)
+* Security analysis (e.g., SQL injection risk detection)
+* Git repository analysis (commit history, churn, contributor impact)
+* Solution and project structure exploration
+* Method and comment inspection tools
+* Heuristic AI-generated code detection
+* Backlog management API
+* Export functionality (CSV, JSON, PDF)
+* JWT authentication with role-based authorization
+* Desktop client with token-based login
+
+---
+
+## Requirements
+
+To run the project locally you need:
 
 * .NET 8 SDK
-* SQL Server (LocalDB or Docker)
-* Visual Studio 2022 / Rider for development
-* Windows required to run the WPF client (API runs cross-platform) ([GitHub][1])
+* SQL Server (LocalDB, SQL Express, or Docker)
+* Visual Studio 2022 or JetBrains Rider recommended
+* Windows (required only for running the WPF client)
+
+The API itself runs cross-platform.
 
 ---
 
-## 🧭 **Quick Start**
+## Getting Started
 
-### 1. Clone & Build
+Clone the repository:
 
-```bash
+```
 git clone https://github.com/antonlidstroem/Synthtax3.git
 cd Synthtax3
 dotnet restore
 dotnet build
 ```
 
----
+Apply database migrations:
 
-### 2. Configure Database
-
-**LocalDB (default)**
-
-```bash
+```
 cd Synthtax.API
 dotnet ef database update
 ```
 
-**Docker SQL Server**
+Run the API:
 
-```bash
-docker compose up -d db
-cd Synthtax.API
-dotnet ef database update --connection "Server=localhost,1433;Database=SynthtaxDb;User Id=sa;Password=Synthtax_2024!;TrustServerCertificate=True;"
 ```
-
----
-
-### 3. Run the API
-
-```bash
-cd Synthtax.API
 dotnet run
 ```
 
-* API available at `https://localhost:5001`
-* Swagger documented at `https://localhost:5001/swagger` ([GitHub][1])
+In development mode, Swagger is available at:
+
+```
+https://localhost:5001/swagger
+```
+
+To run the desktop client, open the solution in Visual Studio and set **Synthtax.WPF** as the startup project.
 
 ---
 
-### 4. Run the WPF Client (Windows)
+## API Capabilities
 
-Open the solution in Visual Studio and set **Synthtax.WPF** as the startup project, then press F5. ([GitHub][1])
+The API exposes endpoints for:
 
----
+* Authentication (login, register, refresh, logout)
+* Code analysis of entire solutions
+* Security scanning
+* Metrics calculation
+* Git analysis
+* Structure analysis
+* Method and comment exploration
+* AI detection
+* Backlog management (CRUD + export)
+* Administrative user management
 
-## 📚 **API Endpoints (Summary)**
-
-| Category  | Endpoint                                                | Description          |               |
-| --------- | ------------------------------------------------------- | -------------------- | ------------- |
-| Auth      | `POST /api/auth/login`, `register`, `refresh`, `logout` | User identity flows  |               |
-| Code      | `POST /api/codeanalysis/solution`                       | Analyze a solution   |               |
-| Metrics   | `POST /api/metrics/solution`                            | Compute code metrics |               |
-| Git       | `GET /api/git/analyze`                                  | Git history insights |               |
-| Security  | `POST /api/security/analyze`                            | Security scan        |               |
-| Structure | `GET /api/structure`                                    | Project structure    |               |
-| Methods   | `GET /api/methodexplorer/methods`                       | List all methods     |               |
-| Comments  | `GET /api/commentexplorer/all`                          | Comment analysis     |               |
-| AI        | `POST /api/aidetection/analyze`                         | AI code detection    |               |
-| Backlog   | CRUD + export routes                                    | Manage backlog items |               |
-| Admin     | `/api/admin/users`, permissions                         | Admin operations     | ([GitHub][1]) |
+All protected endpoints require JWT authentication. Authorization policies ensure that administrative functionality remains restricted.
 
 ---
 
-## 🧪 **Authentication**
+## Authentication & Security
 
-The API uses JWT with refresh tokens and roles (“Admin”, “User”). Policies control access to modules via role and per-module flags. ([GitHub][1])
+Synthtax uses ASP.NET Core Identity combined with JWT Bearer authentication. Roles such as *Admin* and *User* define access levels. Refresh tokens are supported to maintain secure sessions.
+
+When running locally, seeded development users may be created automatically. These should be changed or removed before deploying to production.
 
 ---
 
-## 🖨 **Export Formats**
+## Export Support
 
-Export is supported via:
+Analysis and backlog results can be exported in:
 
 * CSV
 * JSON
-* PDF (via QuestPDF with community license) ([GitHub][1])
+* PDF
+
+PDF export uses QuestPDF under its community license.
 
 ---
 
-## 📥 **Seeding**
+## Design Principles
 
-By default the first run creates users:
+Synthtax focuses on clarity and extensibility. Analysis services are registered via dependency injection and kept modular. Roslyn workspace access is abstracted behind a service interface. Controllers remain thin and delegate logic to domain services.
 
-| Username | Password           | Role  |               |
-| -------- | ------------------ | ----- | ------------- |
-| `admin`  | `Admin@Synthtax1!` | Admin |               |
-| `demo`   | `Demo@Synthtax1!`  | User  | ([GitHub][1]) |
-
-> ⚠️ Change your JWT secret and production credentials before deployment. ([GitHub][1])
+The platform emphasizes static and repository-based analysis rather than runtime instrumentation. This makes it suitable for architectural reviews, audits, and CI-based inspections.
 
 ---
 
-## 📝 **License**
+## License
 
-MIT © Synthtax Contributors. ([GitHub][1])
-
----
-
-## 📑 **Analysis — All API Functional Services**
-
-Here is the list of services in the API project and what they do.
-
-### **Analysis / Code Intelligence**
-
-| Service                     | Responsibility                                    |
-| --------------------------- | ------------------------------------------------- |
-| `ICodeAnalysisService`      | Performs Roslyn solution code analysis            |
-| `IMetricsService`           | Calculates code metrics (LOC, complexity, trends) |
-| `IStructureAnalysisService` | Returns project and solution structure            |
-| `ISecurityAnalysisService`  | Performs vulnerability scanning                   |
-| `IAIDetectionService`       | Detects AI-generated code heuristically           |
-| `IMethodExplorerService`    | Lists all methods with filters                    |
-| `ICommentExplorerService`   | Extracts comment types and metadata               |
-| `IGitAnalysisService`       | Analyzes Git history (commit, churn, bus factor)  |
+MIT License.
 
 ---
 
-### **Export & Backlog**
+If you'd like, I can now:
 
-| Service                       | Responsibility                       |
-| ----------------------------- | ------------------------------------ |
-| `IExportService`              | Exports backlog / analysis results   |
-| Backlog repository & services | CRUD and filtering for backlog items |
-
----
-
-### **Infrastructure & Shared**
-
-| Service                   | Responsibility                         |
-| ------------------------- | -------------------------------------- |
-| `IRoslynWorkspaceService` | Roslyn workspace and contextual access |
-| Identity managers         | User login, roles, claims              |
-| Token management          | Refresh token store and rotation       |
-
----
-
-[1]: https://github.com/antonlidstroem/Synthtax3 "GitHub - antonlidstroem/Synthtax3: With correct API, identity etc"
+* Tighten it into a more “startup polished” version
+* Make it more academic/portfolio-focused
+* Or tailor it specifically for recruiters or GitHub visibility 🚀
