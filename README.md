@@ -1,8 +1,3 @@
-Bra — då kör vi på den stilen 👍
-Här får du den första versionen omskriven som **sammanhängande, färdig README**, utan GitHub-citatreferenser och utan uppdelning i separata block.
-
----
-
 # Synthtax — C# Code Intelligence Tool
 
 **Synthtax** is an extensible code intelligence platform for C# developers. It provides deep, programmatic analysis of .NET solutions using Roslyn, combined with project metrics, security scanning, Git history insights, backlog management, and a desktop client. The system is built with a clear separation between a modern ASP.NET Core API and a WPF front-end, and includes JWT authentication with role-based access control.
@@ -143,9 +138,3 @@ The platform emphasizes static and repository-based analysis rather than runtime
 MIT License.
 
 ---
-
-If you'd like, I can now:
-
-* Tighten it into a more “startup polished” version
-* Make it more academic/portfolio-focused
-* Or tailor it specifically for recruiters or GitHub visibility 🚀
