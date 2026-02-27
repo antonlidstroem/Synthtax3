@@ -407,7 +407,7 @@ public class SemanticSecurityAnalysisService
                 LineNumber = startLine,
                 EndLineNumber = startLine,
                 IssueType = "MissingCancellationToken_Semantic",
-                Severity = Severity.Warning,
+                Severity = Severity.Medium,
                 Description = $"Async method '{method.Identifier.Text}' does not accept CancellationToken. Inner calls that support it: {string.Join(", ", innerCalls.Take(3))}.",
                 CodeSnippet = snippet,
                 SuggestedFix = desc,

@@ -26,7 +26,7 @@ public class CodeFixDto
     /// </summary>
     public string OriginalCodeSnippet { get; set; } = string.Empty;
 
-    public Severity Priority { get; set; } = Severity.Warning;
+    public Severity Priority { get; set; } = Severity.Critical;
 
     /// <summary>
     /// Whether this fix can be applied automatically (safe transforms only).
