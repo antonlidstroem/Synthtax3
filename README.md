@@ -1,15 +1,3 @@
-## 📌 **Short Project Description (≤30 words)**
-
-A .NET(8) tool for deep code intelligence in C# — combining Roslyn static analysis, Git insights, security scanning, metrics, an API, and a WPF client. ([GitHub][1])
-
----
-
-## 📘 **README for Synthtax3 (English)**
-
-Below is a complete README suitable for the repository — clear, professional, and not overly “AI-like” in tone.
-
----
-
 # **Synthtax — C# Code Intelligence Tool**
 
 **Synthtax** is an extensible code intelligence platform for C# developers. It provides deep programmatic analysis through Roslyn, project metrics, security scanning, Git history exploration, backlog management, and a desktop UI client. The architecture separates a rich ASP.NET Core API from a WPF front-end, and supports modern authentication, role-based access control, and export capabilities. ([GitHub][1])
