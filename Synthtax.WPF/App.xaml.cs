@@ -1,4 +1,4 @@
-using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -38,8 +38,14 @@ public partial class App : Application
 
     private void OnLoginSucceeded(object? sender, EventArgs e)
     {
+        var mainWindow = new MainWindow(_services!);
+
+            Application.Current.MainWindow = MainWindow;
+
+        mainWindow.Show();
+
         if (sender is Window w) w.Close();
-        new MainWindow(_services!).Show();
+        
     }
 
     private static IServiceProvider BuildServiceProvider()
@@ -47,27 +53,26 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // ── Logging ───────────────────────────────────────────────────────
-        //services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Information));
+        services.AddLogging(b => b
+            .AddDebug()
+            .AddConsole()
+            .SetMinimumLevel(LogLevel.Debug));
 
         // ── Core singletons ───────────────────────────────────────────────
         services.AddSingleton<TokenStore>();
         services.AddSingleton<NavigationService>();
 
         // ── HTTP ──────────────────────────────────────────────────────────
+        // Använd ENBART AddHttpClient<T> – ingen extra AddTransient<ApiClient>.
+        // Typed client injicerar HttpClient automatiskt via konstruktorn.
         services.AddHttpClient<ApiClient>(client =>
         {
-            client.BaseAddress = new Uri("https://localhost:5001/");
-            client.Timeout     = TimeSpan.FromSeconds(120);
-        });
-
-        // Resolve ApiClient from factory
-        services.AddTransient<ApiClient>(sp =>
-        {
-            var factory    = sp.GetRequiredService<IHttpClientFactory>();
-            var http       = factory.CreateClient(nameof(ApiClient));
-            var logger     = sp.GetRequiredService<ILogger<ApiClient>>();
-            var tokenStore = sp.GetRequiredService<TokenStore>();
-            return new ApiClient(http, logger, tokenStore);
+            // Matchar launchSettings.json → "applicationUrl": "http://localhost:5000"
+            // Byt till https://localhost:5001 om du kör med HTTPS i dev.
+            client.BaseAddress = new Uri("http://localhost:5000/");
+            client.Timeout = TimeSpan.FromSeconds(120);
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
         });
 
         // ── ViewModels ────────────────────────────────────────────────────
@@ -85,7 +90,6 @@ public partial class App : Application
         services.AddTransient<CommentExplorerViewModel>();
         services.AddTransient<AIDetectionViewModel>();
 
-        // BacklogViewModel needs IServiceProvider for dialog creation
         services.AddTransient<BacklogViewModel>(sp =>
             new BacklogViewModel(
                 sp.GetRequiredService<ApiClient>(),

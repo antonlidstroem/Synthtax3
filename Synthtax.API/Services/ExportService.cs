@@ -17,7 +17,6 @@ public class ExportService : IExportService
 
     static ExportService()
     {
-        // QuestPDF community license (free for open-source / internal tools)
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
@@ -35,13 +34,11 @@ public class ExportService : IExportService
         {
             await using var stream = new MemoryStream();
             await using var writer = new StreamWriter(stream, leaveOpen: true);
-
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 HasHeaderRecord = true,
                 NewLine = Environment.NewLine
             };
-
             await using var csv = new CsvWriter(writer, config);
             await csv.WriteRecordsAsync(data, cancellationToken);
             await writer.FlushAsync(cancellationToken);
@@ -74,7 +71,6 @@ public class ExportService : IExportService
                 NullValueHandling = NullValueHandling.Ignore,
                 DateTimeZoneHandling = DateTimeZoneHandling.Utc
             };
-
             var json = JsonConvert.SerializeObject(data, settings);
             var bytes = System.Text.Encoding.UTF8.GetBytes(json);
 
@@ -118,62 +114,60 @@ public class ExportService : IExportService
                         page.Margin(40);
                         page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
 
-                        // ── Header ────────────────────────────────────────
                         page.Header().Column(col =>
                         {
                             col.Item().Row(row =>
                             {
-                                row.RelativeItem().Text(title)
+                                row.RelativeItem()
+                                    .Text(title)
                                     .SemiBold().FontSize(16).FontColor(Colors.Blue.Darken3);
-
                                 row.ConstantItem(200).AlignRight()
                                     .Text($"{generatedLabel}: {DateTime.Now:yyyy-MM-dd HH:mm}")
                                     .FontSize(8).FontColor(Colors.Grey.Darken1);
                             });
-
-                            col.Item().PaddingTop(4).BorderBottom(1)
-                                .BorderColor(Colors.Blue.Darken3).Text(string.Empty);
+                            col.Item().PaddingTop(4)
+                                .BorderBottom(1).BorderColor(Colors.Blue.Darken3)
+                                .Text(string.Empty);
                         });
 
-                        // ── Content ───────────────────────────────────────
                         page.Content().PaddingTop(10).Column(col =>
                         {
-                            // Summary line
                             col.Item().PaddingBottom(8)
                                 .Text($"{totalLabel}: {rowList.Count}")
                                 .FontSize(9).FontColor(Colors.Grey.Darken2);
 
-                            // Table
                             col.Item().Table(table =>
                             {
-                                // Columns – distribute evenly
+                                // Column definitions
                                 table.ColumnsDefinition(cols =>
                                 {
                                     for (int i = 0; i < headers.Length; i++)
                                         cols.RelativeColumn();
                                 });
 
-                                // Header row
-                                foreach (var header in headers)
+                                // BUG FIX: table.Header() must be called ONCE with all cells inside.
+                                // The original code called table.Header() in a loop (once per column)
+                                // which caused QuestPDF to render only the last header row, discarding
+                                // all previous ones. The correct pattern is one Header() call that
+                                // iterates the columns internally.
+                                table.Header(h =>
                                 {
-                                    table.Header(h =>
+                                    foreach (var header in headers)
                                     {
-                                        h.Cell().Background(Colors.Blue.Darken3)
+                                        h.Cell()
+                                            .Background(Colors.Blue.Darken3)
                                             .Padding(5)
                                             .Text(header)
                                             .FontColor(Colors.White)
                                             .SemiBold()
                                             .FontSize(8);
-                                    });
-                                }
+                                    }
+                                });
 
-                                // Data rows
                                 var isAlternate = false;
                                 foreach (var row in rowList)
                                 {
-                                    var bg = isAlternate
-                                        ? Colors.Blue.Lighten5
-                                        : Colors.White;
+                                    var bg = isAlternate ? Colors.Blue.Lighten5 : Colors.White;
                                     isAlternate = !isAlternate;
 
                                     for (int i = 0; i < headers.Length; i++)
@@ -186,7 +180,6 @@ public class ExportService : IExportService
                             });
                         });
 
-                        // ── Footer ────────────────────────────────────────
                         page.Footer().AlignRight()
                             .Text(txt =>
                             {

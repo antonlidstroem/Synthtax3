@@ -13,12 +13,11 @@ public static class ApiServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // ── JWT Settings ──────────────────────────────────────────────────
         services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+
         var jwtSettings = configuration.GetSection("JwtSettings").Get<JwtSettings>()
                           ?? throw new InvalidOperationException("JwtSettings not configured.");
 
-        // ── JWT Authentication ────────────────────────────────────────────
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -40,19 +39,23 @@ public static class ApiServiceExtensions
             };
         });
 
-        // ── Authorization ─────────────────────────────────────────────────
         services.AddAuthorization(options =>
         {
             options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
             options.AddPolicy("UserOrAdmin", policy => policy.RequireRole("Admin", "User"));
         });
 
-        // ── Application Services ──────────────────────────────────────────
         services.AddScoped<IJwtService, JwtService>();
-        // Scoped so temp clone dirs are cleaned up after each request
-        services.AddScoped<RepositoryResolverService>();
 
-        // ── CORS ──────────────────────────────────────────────────────────
+        // -----------------------------------------------------------------------
+        // Gemensam resolver för lokal sökväg + GitHub-URL → lokal .sln / mapp
+        // Registreras både som konkret typ (för controllerkonstruktorer) och
+        // som interface (för testbarhet och framtida WPF-delning via Core).
+        // -----------------------------------------------------------------------
+        services.AddScoped<RepositoryResolverService>();
+        services.AddScoped<IRepositoryResolver>(sp =>
+            sp.GetRequiredService<RepositoryResolverService>());
+
         services.AddCors(options =>
         {
             options.AddPolicy("SynthtaxPolicy", policy =>
@@ -64,7 +67,6 @@ public static class ApiServiceExtensions
             });
         });
 
-        // ── Controllers + JSON ────────────────────────────────────────────
         services.AddControllers()
             .AddNewtonsoftJson(options =>
             {
@@ -76,7 +78,6 @@ public static class ApiServiceExtensions
                     Newtonsoft.Json.DateTimeZoneHandling.Utc;
             });
 
-        // ── Swagger ───────────────────────────────────────────────────────
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(c =>
         {
@@ -86,7 +87,6 @@ public static class ApiServiceExtensions
                 Version = "v1",
                 Description = "Code analysis and project intelligence platform"
             });
-
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
@@ -96,7 +96,6 @@ public static class ApiServiceExtensions
                 In = ParameterLocation.Header,
                 Description = "Enter: Bearer {token}"
             });
-
             c.AddSecurityRequirement(new OpenApiSecurityRequirement
             {
                 {
@@ -105,7 +104,7 @@ public static class ApiServiceExtensions
                         Reference = new OpenApiReference
                         {
                             Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
+                            Id   = "Bearer"
                         }
                     },
                     Array.Empty<string>()

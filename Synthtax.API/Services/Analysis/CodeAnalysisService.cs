@@ -1,329 +1,174 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Synthtax.API.Services.Analysis.Rules;
 using Synthtax.Core.DTOs;
-using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
 
 namespace Synthtax.API.Services.Analysis;
 
-public class CodeAnalysisService : ICodeAnalysisService
+/// <summary>
+/// Refactored to a rule-engine pattern.
+/// Each check lives in its own IAnalysisRule so it can be tested, toggled, and
+/// composed independently.  Documents are processed via Parallel.ForEachAsync.
+/// </summary>
+public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
 {
     private readonly ILogger<CodeAnalysisService> _logger;
+    private readonly IRoslynWorkspaceService _workspace;
+    private readonly IReadOnlyList<IAnalysisRule<CodeIssueDto>> _rules;
 
-    public CodeAnalysisService(ILogger<CodeAnalysisService> logger)
+    public CodeAnalysisService(
+        ILogger<CodeAnalysisService> logger,
+        IRoslynWorkspaceService workspace,
+        IEnumerable<IAnalysisRule<CodeIssueDto>>? rules = null)
     {
         _logger = logger;
+        _workspace = workspace;
+        _rules = rules?.Where(r => r.IsEnabled).ToList()
+                     ?? new List<IAnalysisRule<CodeIssueDto>>
+                     {
+                         new LongMethodRule(),
+                         new DeadVariableRule(),
+                         new UnnecessaryUsingRule(),
+                     };
     }
 
+    // ── ISolutionAnalysisPipeline entry point (context already loaded) ────────
+
+    public async Task<object> AnalyzeAsync(AnalysisContext ctx, CancellationToken ct)
+        => await RunRulesOnContext(ctx, ctx.Solution.FilePath ?? "solution", ct);
+
+    // ── ICodeAnalysisService ──────────────────────────────────────────────────
+
     public async Task<CodeAnalysisResultDto> AnalyzeSolutionAsync(
-        string solutionPath,
-        CancellationToken cancellationToken = default)
+        string solutionPath, CancellationToken cancellationToken = default)
     {
-        var result = new CodeAnalysisResultDto { SolutionPath = solutionPath };
+        var (workspace, solution) = await _workspace.LoadSolutionAsync(
+            solutionPath, cancellationToken);
 
-        try
-        {
-            var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-                solutionPath, _logger, cancellationToken);
+        await using var ctx = await AnalysisContext.BuildAsync(
+            solution, workspace, _workspace, null, _logger, cancellationToken);
 
-            using (workspace)
-            {
-                var documents = RoslynWorkspaceHelper.GetCSharpDocuments(solution).ToList();
-
-                foreach (var doc in documents)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                    var semanticModel = await doc.GetSemanticModelAsync(cancellationToken);
-                    if (root is null || semanticModel is null) continue;
-
-                    result.LongMethods.AddRange(FindLongMethodsInTree(root, doc.FilePath ?? doc.Name));
-                    result.DeadVariables.AddRange(FindDeadVariablesInTree(root, semanticModel, doc.FilePath ?? doc.Name));
-                    result.UnnecessaryUsings.AddRange(FindUnnecessaryUsingsInTree(root, semanticModel, doc.FilePath ?? doc.Name));
-                }
-            }
-
-            result.TotalIssues = result.LongMethods.Count
-                               + result.DeadVariables.Count
-                               + result.UnnecessaryUsings.Count;
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error analyzing solution {Path}", solutionPath);
-            result.Errors.Add($"Analysis error: {ex.Message}");
-        }
-
-        return result;
+        return await RunRulesOnContext(ctx, solutionPath, cancellationToken);
     }
 
     public async Task<CodeAnalysisResultDto> AnalyzeProjectAsync(
-        string projectPath,
-        CancellationToken cancellationToken = default)
+        string projectPath, CancellationToken cancellationToken = default)
     {
-        var result = new CodeAnalysisResultDto { SolutionPath = projectPath };
+        var (workspace, project) = await _workspace.LoadProjectAsync(
+            projectPath, cancellationToken);
 
+        var result = new CodeAnalysisResultDto { SolutionPath = projectPath };
         try
         {
-            var (workspace, project) = await RoslynWorkspaceHelper.LoadProjectAsync(
-                projectPath, _logger, cancellationToken);
-
-            using (workspace)
-            {
-                var documents = RoslynWorkspaceHelper.GetCSharpDocuments(project).ToList();
-
-                foreach (var doc in documents)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                    var semanticModel = await doc.GetSemanticModelAsync(cancellationToken);
-                    if (root is null || semanticModel is null) continue;
-
-                    result.LongMethods.AddRange(FindLongMethodsInTree(root, doc.FilePath ?? doc.Name));
-                    result.DeadVariables.AddRange(FindDeadVariablesInTree(root, semanticModel, doc.FilePath ?? doc.Name));
-                    result.UnnecessaryUsings.AddRange(FindUnnecessaryUsingsInTree(root, semanticModel, doc.FilePath ?? doc.Name));
-                }
-            }
-
-            result.TotalIssues = result.LongMethods.Count
-                               + result.DeadVariables.Count
-                               + result.UnnecessaryUsings.Count;
+            var docs = _workspace.GetCSharpDocuments(project).ToList();
+            await ProcessDocumentsAsync(docs, null, result, cancellationToken);
+            result.TotalIssues = result.LongMethods.Count + result.DeadVariables.Count + result.UnnecessaryUsings.Count;
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error analyzing project {Path}", projectPath);
-            result.Errors.Add($"Analysis error: {ex.Message}");
-        }
+        finally { workspace.Dispose(); }
 
         return result;
     }
 
     public async Task<List<CodeIssueDto>> FindLongMethodsAsync(
-        string solutionPath,
-        int maxLines = 50,
-        CancellationToken cancellationToken = default)
+        string solutionPath, int maxLines = 50, CancellationToken cancellationToken = default)
     {
-        var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-            solutionPath, _logger, cancellationToken);
-
-        var results = new List<CodeIssueDto>();
-        using (workspace)
-        {
-            foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(solution))
-            {
-                var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                if (root is null) continue;
-                results.AddRange(FindLongMethodsInTree(root, doc.FilePath ?? doc.Name, maxLines));
-            }
-        }
-        return results;
+        var singleRule = new LongMethodRule(maxLines);
+        return await RunSingleRule(solutionPath, singleRule, cancellationToken);
     }
 
     public async Task<List<CodeIssueDto>> FindDeadVariablesAsync(
-        string solutionPath,
-        CancellationToken cancellationToken = default)
-    {
-        var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-            solutionPath, _logger, cancellationToken);
-
-        var results = new List<CodeIssueDto>();
-        using (workspace)
-        {
-            foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(solution))
-            {
-                var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                var model = await doc.GetSemanticModelAsync(cancellationToken);
-                if (root is null || model is null) continue;
-                results.AddRange(FindDeadVariablesInTree(root, model, doc.FilePath ?? doc.Name));
-            }
-        }
-        return results;
-    }
+        string solutionPath, CancellationToken cancellationToken = default)
+        => await RunSingleRule(solutionPath, new DeadVariableRule(), cancellationToken);
 
     public async Task<List<CodeIssueDto>> FindUnnecessaryUsingsAsync(
-        string solutionPath,
-        CancellationToken cancellationToken = default)
-    {
-        var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-            solutionPath, _logger, cancellationToken);
+        string solutionPath, CancellationToken cancellationToken = default)
+        => await RunSingleRule(solutionPath, new UnnecessaryUsingRule(), cancellationToken);
 
-        var results = new List<CodeIssueDto>();
-        using (workspace)
+    // ── Core logic ────────────────────────────────────────────────────────────
+
+    private async Task<CodeAnalysisResultDto> RunRulesOnContext(
+        AnalysisContext ctx, string solutionPath, CancellationToken ct)
+    {
+        var result = new CodeAnalysisResultDto { SolutionPath = solutionPath };
+        try
         {
-            foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(solution))
-            {
-                var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                var model = await doc.GetSemanticModelAsync(cancellationToken);
-                if (root is null || model is null) continue;
-                results.AddRange(FindUnnecessaryUsingsInTree(root, model, doc.FilePath ?? doc.Name));
-            }
+            await ProcessDocumentsAsync(ctx.Documents, ctx, result, ct);
+            result.TotalIssues =
+                result.LongMethods.Count +
+                result.DeadVariables.Count +
+                result.UnnecessaryUsings.Count;
         }
-        return results;
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Code analysis error for {Path}", solutionPath);
+            result.Errors.Add($"Code analysis error: {ex.Message}");
+        }
+        return result;
     }
 
-    // ── Private Analysis Helpers ─────────────────────────────────────────────
-
-    private static List<CodeIssueDto> FindLongMethodsInTree(
-        SyntaxNode root,
-        string filePath,
-        int maxLines = 50)
+    private async Task ProcessDocumentsAsync(
+        IReadOnlyList<Document> docs,
+        AnalysisContext? ctx,
+        CodeAnalysisResultDto result,
+        CancellationToken ct)
     {
-        var issues = new List<CodeIssueDto>();
-        var fileName = Path.GetFileName(filePath);
+        var longBag = new System.Collections.Concurrent.ConcurrentBag<CodeIssueDto>();
+        var deadBag = new System.Collections.Concurrent.ConcurrentBag<CodeIssueDto>();
+        var usingBag = new System.Collections.Concurrent.ConcurrentBag<CodeIssueDto>();
 
-        var methods = root.DescendantNodes()
-            .OfType<MethodDeclarationSyntax>();
-
-        foreach (var method in methods)
-        {
-            var span = method.GetLocation().GetLineSpan();
-            var lineCount = span.EndLinePosition.Line - span.StartLinePosition.Line + 1;
-
-            if (lineCount <= maxLines) continue;
-
-            var containingClass = method.Ancestors()
-                .OfType<TypeDeclarationSyntax>()
-                .FirstOrDefault()?.Identifier.Text ?? "Unknown";
-
-            issues.Add(new CodeIssueDto
+        await Parallel.ForEachAsync(docs,
+            new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount },
+            async (doc, token) =>
             {
-                FilePath = filePath,
-                FileName = fileName,
-                IssueType = "LongMethod",
-                Description = $"Method '{method.Identifier.Text}' is {lineCount} lines long (limit: {maxLines}).",
-                LineNumber = span.StartLinePosition.Line + 1,
-                LineCount = lineCount,
-                MethodName = method.Identifier.Text,
-                Snippet = $"{containingClass}.{method.Identifier.Text}",
-                Severity = lineCount > maxLines * 2 ? Severity.High : Severity.Medium
-            });
-        }
+                var root = ctx?.GetRoot(doc) ?? await doc.GetSyntaxRootAsync(token);
+                var model = ctx?.GetModel(doc) ?? await doc.GetSemanticModelAsync(token);
+                if (root is null) return;
 
-        return issues;
-    }
+                var filePath = ctx?.GetFilePath(doc) ?? doc.FilePath ?? doc.Name;
 
-    private static List<CodeIssueDto> FindDeadVariablesInTree(
-        SyntaxNode root,
-        SemanticModel semanticModel,
-        string filePath)
-    {
-        var issues = new List<CodeIssueDto>();
-        var fileName = Path.GetFileName(filePath);
-
-        // Find all local variable declarations
-        var localDeclarations = root.DescendantNodes()
-            .OfType<LocalDeclarationStatementSyntax>();
-
-        foreach (var declaration in localDeclarations)
-        {
-            foreach (var variable in declaration.Declaration.Variables)
-            {
-                var symbol = semanticModel.GetDeclaredSymbol(variable) as ILocalSymbol;
-                if (symbol is null) continue;
-
-                // Find all references to this symbol in its containing method body
-                var containingMethod = declaration.Ancestors()
-                    .OfType<MethodDeclarationSyntax>()
-                    .FirstOrDefault();
-
-                if (containingMethod is null) continue;
-
-                var methodRoot = containingMethod.Body ?? (SyntaxNode?)containingMethod.ExpressionBody;
-                if (methodRoot is null) continue;
-
-                // Count usages (excluding the declaration itself)
-                var usages = methodRoot.DescendantNodes()
-                    .OfType<IdentifierNameSyntax>()
-                    .Where(id => id.Identifier.Text == variable.Identifier.Text
-                              && id.SpanStart != variable.Identifier.SpanStart)
-                    .ToList();
-
-                if (usages.Count == 0)
+                foreach (var rule in _rules)
                 {
-                    var span = variable.GetLocation().GetLineSpan();
-                    issues.Add(new CodeIssueDto
+                    var issues = rule.Analyze(root, model, filePath, token);
+                    foreach (var issue in issues)
                     {
-                        FilePath = filePath,
-                        FileName = fileName,
-                        IssueType = "DeadVariable",
-                        Description = $"Variable '{variable.Identifier.Text}' is declared but never used.",
-                        LineNumber = span.StartLinePosition.Line + 1,
-                        MethodName = containingMethod.Identifier.Text,
-                        Snippet = declaration.ToString().Trim(),
-                        Severity = Severity.Low
-                    });
+                        switch (issue.IssueType)
+                        {
+                            case "LongMethod": longBag.Add(issue); break;
+                            case "DeadVariable": deadBag.Add(issue); break;
+                            case "UnnecessaryUsing": usingBag.Add(issue); break;
+                        }
+                    }
                 }
-            }
-        }
+            });
 
-        return issues;
+        result.LongMethods.AddRange(longBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
+        result.DeadVariables.AddRange(deadBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
+        result.UnnecessaryUsings.AddRange(usingBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
     }
 
-    private static List<CodeIssueDto> FindUnnecessaryUsingsInTree(
-        SyntaxNode root,
-        SemanticModel semanticModel,
-        string filePath)
+    private async Task<List<CodeIssueDto>> RunSingleRule(
+        string solutionPath, IAnalysisRule<CodeIssueDto> rule, CancellationToken ct)
     {
-        var issues = new List<CodeIssueDto>();
-        var fileName = Path.GetFileName(filePath);
+        var (ws, sol) = await _workspace.LoadSolutionAsync(solutionPath, ct);
+        var results = new System.Collections.Concurrent.ConcurrentBag<CodeIssueDto>();
 
-        var usingDirectives = root.DescendantNodes()
-            .OfType<UsingDirectiveSyntax>()
-            .Where(u => u.StaticKeyword.IsKind(SyntaxKind.None) && u.Alias is null);
+        await using var ctx = await AnalysisContext.BuildAsync(sol, ws, _workspace, null, _logger, ct);
 
-        // Collect all referenced type names in this file
-        var referencedIdentifiers = root.DescendantNodes()
-            .OfType<IdentifierNameSyntax>()
-            .Select(id => id.Identifier.Text)
-            .ToHashSet();
-
-        var referencedQualified = root.DescendantNodes()
-            .OfType<QualifiedNameSyntax>()
-            .Select(q => q.ToString())
-            .ToHashSet();
-
-        foreach (var usingDir in usingDirectives)
-        {
-            if (usingDir.Name is null) continue;
-
-            var namespaceName = usingDir.Name.ToString();
-
-            // Check if any referenced identifier could belong to this namespace
-            // by looking for unqualified identifiers that reference symbols in this namespace
-            var isUsed = false;
-
-            foreach (var identifier in root.DescendantNodes().OfType<IdentifierNameSyntax>())
+        await Parallel.ForEachAsync(ctx.Documents,
+            new ParallelOptions { CancellationToken = ct },
+            (doc, token) =>
             {
-                var symbolInfo = semanticModel.GetSymbolInfo(identifier);
-                var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
-                if (symbol is null) continue;
+                var root = ctx.GetRoot(doc);
+                var model = ctx.GetModel(doc);
+                if (root is null) return ValueTask.CompletedTask;
 
-                var ns = symbol.ContainingNamespace?.ToDisplayString();
-                if (ns is not null && (ns == namespaceName || ns.StartsWith(namespaceName + ".")))
-                {
-                    isUsed = true;
-                    break;
-                }
-            }
+                foreach (var issue in rule.Analyze(root, model, ctx.GetFilePath(doc), token))
+                    results.Add(issue);
 
-            if (!isUsed)
-            {
-                var span = usingDir.GetLocation().GetLineSpan();
-                issues.Add(new CodeIssueDto
-                {
-                    FilePath = filePath,
-                    FileName = fileName,
-                    IssueType = "UnnecessaryUsing",
-                    Description = $"Using directive '{namespaceName}' appears to be unnecessary.",
-                    LineNumber = span.StartLinePosition.Line + 1,
-                    Snippet = usingDir.ToString().Trim(),
-                    Severity = Severity.Low
-                });
-            }
-        }
+                return ValueTask.CompletedTask;
+            });
 
-        return issues;
+        return results.ToList();
     }
 }

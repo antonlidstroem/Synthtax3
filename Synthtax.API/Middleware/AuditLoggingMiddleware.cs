@@ -3,15 +3,13 @@ using Synthtax.Core.Interfaces;
 
 namespace Synthtax.API.Middleware;
 
-/// <summary>
-/// Middleware som automatiskt loggar utvalda API-anrop i audit-loggen.
-/// </summary>
 public class AuditLoggingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<AuditLoggingMiddleware> _logger;
+    // Hämtas en gång från root-provider – aldrig disposed under appens livstid
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    // Endpoints som alltid ska auditloggas
     private static readonly HashSet<string> AuditedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         "/api/auth/login",
@@ -22,44 +20,51 @@ public class AuditLoggingMiddleware
         "/api/export"
     };
 
-    public AuditLoggingMiddleware(RequestDelegate next, ILogger<AuditLoggingMiddleware> logger)
+    public AuditLoggingMiddleware(
+        RequestDelegate next,
+        ILogger<AuditLoggingMiddleware> logger,
+        IServiceScopeFactory scopeFactory)   // ← injiceras från root, aldrig disposed
     {
         _next = next;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
         await _next(context);
 
-        // Logga bara anrop mot utvalda paths och POST/DELETE
         var path = context.Request.Path.Value ?? string.Empty;
         var method = context.Request.Method;
         var statusCode = context.Response.StatusCode;
 
-        bool shouldAudit = AuditedPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase))
-                        || (method is "DELETE" && path.StartsWith("/api/admin", StringComparison.OrdinalIgnoreCase));
+        bool shouldAudit =
+            AuditedPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+            || (method is "DELETE" && path.StartsWith("/api/admin", StringComparison.OrdinalIgnoreCase));
 
         if (!shouldAudit) return;
 
+        // Capture värden INNAN request-scopet stängs
         var userId = context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
         var success = statusCode is >= 200 and < 400;
         var ip = context.Connection.RemoteIpAddress?.ToString();
+        var action = DetermineAction(method, path);
+        var resType = DetermineResourceType(path);
+        var details = $"{method} {path} → {statusCode}";
 
-        // Gör audit-loggning asynkront i bakgrunden för att inte påverka svarstid
+        // Kör audit i bakgrunden med _scopeFactory (root-scope, aldrig disposed)
         _ = Task.Run(async () =>
         {
             try
             {
-                using var scope = context.RequestServices.CreateScope();
+                await using var scope = _scopeFactory.CreateAsyncScope();
                 var auditRepo = scope.ServiceProvider.GetRequiredService<IAuditLogRepository>();
 
-                var action = DetermineAction(method, path);
                 await auditRepo.LogAsync(
                     userId: userId,
                     action: action,
-                    resourceType: DetermineResourceType(path),
-                    details: $"{method} {path} → {statusCode}",
+                    resourceType: resType,
+                    details: details,
                     ipAddress: ip,
                     success: success);
             }
@@ -85,7 +90,6 @@ public class AuditLoggingMiddleware
                 "PUT" or "PATCH" => "UpdateUser",
                 _ => "ViewUsers"
             };
-
         return $"{method}:{path}";
     }
 

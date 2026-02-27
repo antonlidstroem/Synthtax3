@@ -13,6 +13,8 @@ namespace Synthtax.API.Controllers;
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
 [Produces("application/json")]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
 public class AdminController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -32,11 +34,11 @@ public class AdminController : ControllerBase
         _logger = logger;
     }
 
-    // ── User Management ──────────────────────────────────────────────────────
-
-    /// <summary>Listar alla användare i tenanten.</summary>
+    /// <summary>Returns all users within the admin's tenant.</summary>
     [HttpGet("users")]
     [ProducesResponseType(typeof(List<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllUsers()
     {
         var tenantId = GetTenantId();
@@ -44,20 +46,24 @@ public class AdminController : ControllerBase
         return Ok(users);
     }
 
-    /// <summary>Hämtar en specifik användare.</summary>
+    /// <summary>Returns a single user by ID.</summary>
     [HttpGet("users/{userId}")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUser(string userId)
     {
         var user = await _userRepository.GetUserDtoByIdAsync(userId);
         return user is null ? NotFound() : Ok(user);
     }
 
-    /// <summary>Skapar en ny användare (Admin-funktion).</summary>
+    /// <summary>Creates a new user and assigns a role.</summary>
     [HttpPost("users")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateUser([FromBody] AdminCreateUserDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -97,10 +103,12 @@ public class AdminController : ControllerBase
         return CreatedAtAction(nameof(GetUser), new { userId = user.Id }, userDto);
     }
 
-    /// <summary>Aktiverar eller inaktiverar ett användarkonto.</summary>
+    /// <summary>Activates or deactivates a user account.</summary>
     [HttpPatch("users/{userId}/active")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SetUserActive(string userId, [FromBody] SetActiveDto dto)
     {
         var user = await _userManager.FindByIdAsync(userId);
@@ -116,11 +124,13 @@ public class AdminController : ControllerBase
         return Ok(new { Message = $"User {(dto.IsActive ? "activated" : "deactivated")}." });
     }
 
-    /// <summary>Tar bort ett användarkonto permanent.</summary>
+    /// <summary>Permanently deletes a user. Cannot delete yourself.</summary>
     [HttpDelete("users/{userId}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteUser(string userId)
     {
         if (userId == GetCurrentUserId())
@@ -141,11 +151,13 @@ public class AdminController : ControllerBase
         return Ok(new { Message = $"User '{userName}' deleted." });
     }
 
-    /// <summary>Återställer lösenord för en användare.</summary>
+    /// <summary>Resets a user's password and revokes all active sessions.</summary>
     [HttpPost("users/reset-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ResetPassword([FromBody] AdminResetPasswordDto dto)
     {
         var user = await _userManager.FindByIdAsync(dto.UserId);
@@ -153,11 +165,9 @@ public class AdminController : ControllerBase
 
         var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, resetToken, dto.NewPassword);
-
         if (!result.Succeeded)
             return BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
 
-        // Invalidera alla sessions
         await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id);
 
         var adminId = GetCurrentUserId();
@@ -167,14 +177,19 @@ public class AdminController : ControllerBase
         return Ok(new { Message = "Password reset successfully. All existing sessions revoked." });
     }
 
-    /// <summary>Uppdaterar vilka moduler en användare har åtkomst till.</summary>
+    /// <summary>Updates which modules a user has access to.</summary>
     [HttpPatch("users/{userId}/modules")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateUserModules(
         string userId, [FromBody] UpdateUserModulesDto dto)
     {
-        if (!string.IsNullOrWhiteSpace(userId)) dto.UserId = userId;
+        // Always prefer the route parameter over whatever was in the body
+        if (!string.IsNullOrWhiteSpace(userId))
+            dto.UserId = userId;
+
         var user = await _userManager.FindByIdAsync(dto.UserId);
         if (user is null) return NotFound();
 
@@ -188,10 +203,13 @@ public class AdminController : ControllerBase
         return Ok(new { Message = "Module access updated." });
     }
 
-    /// <summary>Ändrar roll för en användare.</summary>
+    /// <summary>Changes a user's role. Cannot change your own role.</summary>
     [HttpPut("users/{userId}/role")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateUserRole(string userId, [FromBody] UpdateRoleDto dto)
     {
         if (userId == GetCurrentUserId())
@@ -214,19 +232,17 @@ public class AdminController : ControllerBase
         return Ok(new { Message = $"Role updated to '{newRole}'." });
     }
 
-    // ── Activity Log ─────────────────────────────────────────────────────────
-
-    /// <summary>Hämtar audit-logg paginerat.</summary>
+    /// <summary>Returns a paged audit log filtered by tenant.</summary>
     [HttpGet("audit-log")]
     [ProducesResponseType(typeof(PagedResultDto<AuditLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAuditLog([FromQuery] AuditLogQueryDto query)
     {
         var tenantId = GetTenantId();
         var result = await _auditLog.GetPagedAsync(query, tenantId);
         return Ok(result);
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private string GetCurrentUserId()
         => User.FindFirstValue(ClaimTypes.NameIdentifier)

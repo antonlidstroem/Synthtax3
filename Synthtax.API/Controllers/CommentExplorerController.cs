@@ -12,40 +12,48 @@ namespace Synthtax.API.Controllers;
 [Produces("application/json")]
 public class CommentExplorerController : ControllerBase
 {
-    private readonly ICommentExplorerService _commentService;
+    private readonly ICommentExplorerService _commentExplorerService;
     private readonly RepositoryResolverService _resolver;
 
     public CommentExplorerController(
-        ICommentExplorerService commentService,
+        ICommentExplorerService commentExplorerService,
         RepositoryResolverService resolver)
     {
-        _commentService = commentService;
+        _commentExplorerService = commentExplorerService;
         _resolver = resolver;
     }
 
     /// <summary>
-    /// Hämtar alla kommentarer och regioner.
-    /// Accepterar lokal .sln-sökväg ELLER GitHub/GitLab-URL.
+    /// Hämtar alla kommentarer i solutionen.
+    /// Accepterar lokal .sln-sökväg, lokal mapp eller GitHub-URL.
     /// </summary>
-    [HttpGet("all")]
+    [HttpGet("comments")]
     [ProducesResponseType(typeof(CommentExplorerResultDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll(
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAllComments(
         [FromQuery] string solutionPath,
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _commentService.GetAllCommentsAsync(
+            var result = await _commentExplorerService.GetAllCommentsAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Hämtar TODO/FIXME/HACK-kommentarer.</summary>
+    /// <summary>
+    /// Hämtar enbart TODO/FIXME/HACK-kommentarer.
+    /// Accepterar lokal .sln-sökväg, lokal mapp eller GitHub-URL.
+    /// </summary>
     [HttpGet("todos")]
     [ProducesResponseType(typeof(List<CommentDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTodos(
@@ -53,18 +61,25 @@ public class CommentExplorerController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _commentService.GetTodoCommentsAsync(
+            var result = await _commentExplorerService.GetTodoCommentsAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 
-    /// <summary>Hämtar alla #region-definitioner.</summary>
+    /// <summary>
+    /// Hämtar alla #region-block.
+    /// Accepterar lokal .sln-sökväg, lokal mapp eller GitHub-URL.
+    /// </summary>
     [HttpGet("regions")]
     [ProducesResponseType(typeof(List<RegionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRegions(
@@ -72,14 +87,18 @@ public class CommentExplorerController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var resolved = await _resolver.ResolveAsync(solutionPath, cancellationToken);
-        if (!resolved.Success) return BadRequest(new { Message = resolved.ErrorMessage });
+        if (!resolved.Success)
+            return BadRequest(new { Message = resolved.ErrorMessage });
 
         try
         {
-            var result = await _commentService.GetRegionsAsync(
+            var result = await _commentExplorerService.GetRegionsAsync(
                 resolved.LocalPath!, cancellationToken);
             return Ok(result);
         }
-        finally { if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir); }
+        finally
+        {
+            if (resolved.IsClone) _resolver.Cleanup(resolved.CloneDir);
+        }
     }
 }
