@@ -18,6 +18,7 @@ public static class AnalysisServiceExtensions
         services.AddScoped<ISecurityAnalysisService, SecurityAnalysisService>();
         services.AddScoped<IAIDetectionService, AIDetectionService>();
         services.AddSingleton<IExportService, ExportService>();
+        services.AddScoped<IRoslynWorkspaceService, RoslynWorkspaceService>();
 
         // ── NEW: Semantic analysis services ──────────────────────────────────
         services.AddScoped<SemanticCodeAnalysisService>();
