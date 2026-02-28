@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -7,20 +8,18 @@ using Synthtax.API.Extensions;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Entities;
-using Synthtax.Infrastructure.Repositories;
-using System.IdentityModel.Tokens.Jwt;
 
 namespace Synthtax.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class AuthController : ControllerBase
+public class AuthController : SynthtaxControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IJwtService _jwtService;
-    private readonly UserRepository _userRepository;
+    private readonly IUserRepository _userRepository;    // ← interface
     private readonly IAuditLogRepository _auditLog;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthController> _logger;
@@ -29,21 +28,20 @@ public class AuthController : ControllerBase
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IJwtService jwtService,
-        UserRepository userRepository,
+        IUserRepository userRepository,
         IAuditLogRepository auditLog,
         IOptions<JwtSettings> jwtSettings,
         ILogger<AuthController> logger)
     {
-        _userManager = userManager;
-        _signInManager = signInManager;
-        _jwtService = jwtService;
+        _userManager    = userManager;
+        _signInManager  = signInManager;
+        _jwtService     = jwtService;
         _userRepository = userRepository;
-        _auditLog = auditLog;
-        _jwtSettings = jwtSettings.Value;
-        _logger = logger;
+        _auditLog       = auditLog;
+        _jwtSettings    = jwtSettings.Value;
+        _logger         = logger;
     }
 
-    /// <summary>Registrerar en ny användare (kräver Admin-roll om systemet redan har användare).</summary>
     [HttpPost("register")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status201Created)]
@@ -54,20 +52,20 @@ public class AuthController : ControllerBase
 
         var user = new ApplicationUser
         {
-            UserName = dto.UserName,
-            Email = dto.Email,
-            FullName = dto.FullName,
+            UserName       = dto.UserName,
+            Email          = dto.Email,
+            FullName       = dto.FullName,
             EmailConfirmed = true,
-            IsActive = true,
-            TenantId = Guid.Empty,
-            CreatedAt = DateTime.UtcNow,
-            Preferences = new UserPreference
+            IsActive       = true,
+            TenantId       = Guid.Empty,
+            CreatedAt      = DateTime.UtcNow,
+            Preferences    = new UserPreference
             {
-                Theme = "Light",
-                Language = "sv-SE",
+                Theme              = "Light",
+                Language           = "sv-SE",
                 EmailNotifications = true,
-                ShowMetricsTrend = true,
-                DefaultPageSize = 50
+                ShowMetricsTrend   = true,
+                DefaultPageSize    = 50
             }
         };
 
@@ -77,14 +75,15 @@ public class AuthController : ControllerBase
 
         await _userManager.AddToRoleAsync(user, "User");
 
-        var response = await BuildAuthResponse(user);
+        var response = await BuildAuthResponseAsync(user);
+
         await _auditLog.LogAsync(user.Id, "Register", "User", user.Id,
             $"New user registered: {user.UserName}", GetClientIp());
 
-        return CreatedAtAction(nameof(Register), response);
+        // Pekar på GET /api/users/me istället för på sig själv
+        return Created("/api/users/me", response);
     }
 
-    /// <summary>Loggar in och returnerar JWT + refresh token.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
@@ -101,21 +100,22 @@ public class AuthController : ControllerBase
             return Unauthorized(new { Message = "Invalid username or password." });
         }
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
+        var result = await _signInManager.CheckPasswordSignInAsync(
+            user, dto.Password, lockoutOnFailure: true);
+
         if (!result.Succeeded)
         {
             await _auditLog.LogAsync(user.Id, "Login", "User", user.Id,
                 result.IsLockedOut ? "Account locked out" : "Invalid password",
                 GetClientIp(), success: false);
 
-            if (result.IsLockedOut)
-                return Unauthorized(new { Message = "Account is locked. Try again later." });
-
-            return Unauthorized(new { Message = "Invalid username or password." });
+            return result.IsLockedOut
+                ? Unauthorized(new { Message = "Account is locked. Try again later." })
+                : Unauthorized(new { Message = "Invalid username or password." });
         }
 
         await _userRepository.UpdateLastLoginAsync(user.Id);
-        var response = await BuildAuthResponse(user);
+        var response = await BuildAuthResponseAsync(user);
 
         await _auditLog.LogAsync(user.Id, "Login", "User", user.Id,
             $"Successful login: {user.UserName}", GetClientIp());
@@ -123,7 +123,6 @@ public class AuthController : ControllerBase
         return Ok(response);
     }
 
-    /// <summary>Förnyar access token med ett giltigt refresh token.</summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
@@ -138,27 +137,24 @@ public class AuthController : ControllerBase
         if (!user.IsActive)
             return Unauthorized(new { Message = "User account is inactive." });
 
-        // Rulla refresh token
         var newRefreshToken = CreateRefreshToken(user.Id);
         await _userRepository.RevokeRefreshTokenAsync(storedToken, newRefreshToken.Token, GetClientIp());
         await _userRepository.AddRefreshTokenAsync(newRefreshToken);
 
-        var claims = await BuildClaimsAsync(user);
+        var claims      = await BuildClaimsAsync(user);
         var accessToken = _jwtService.GenerateAccessToken(claims);
-
-        var userDto = await _userRepository.GetUserDtoByIdAsync(user.Id)
-                      ?? throw new InvalidOperationException("User not found.");
+        var userDto     = await _userRepository.GetUserDtoByIdAsync(user.Id)
+                          ?? throw new InvalidOperationException("User not found.");
 
         return Ok(new AuthResponseDto
         {
-            AccessToken = accessToken,
+            AccessToken  = accessToken,
             RefreshToken = newRefreshToken.Token,
-            ExpiresAt = _jwtService.GetAccessTokenExpiry(),
-            User = userDto
+            ExpiresAt    = _jwtService.GetAccessTokenExpiry(),
+            User         = userDto
         });
     }
 
-    /// <summary>Loggar ut och återkallar refresh token.</summary>
     [HttpPost("logout")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -168,35 +164,31 @@ public class AuthController : ControllerBase
         if (storedToken is not null && storedToken.IsActive)
             await _userRepository.RevokeRefreshTokenAsync(storedToken, revokedByIp: GetClientIp());
 
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        await _auditLog.LogAsync(userId, "Logout", "User", userId, null, GetClientIp());
+        await _auditLog.LogAsync(GetCurrentUserId(), "Logout", "User", GetCurrentUserId(),
+            null, GetClientIp());
 
         return Ok(new { Message = "Logged out successfully." });
     }
 
-    /// <summary>Loggar ut från alla enheter (återkallar alla refresh tokens).</summary>
     [HttpPost("logout-all")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> LogoutAll()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-
+        var userId = GetCurrentUserId();
         await _userRepository.RevokeAllRefreshTokensForUserAsync(userId);
         await _auditLog.LogAsync(userId, "LogoutAll", "User", userId,
             "Revoked all sessions", GetClientIp());
         return Ok(new { Message = "All sessions revoked." });
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
 
-    private async Task<AuthResponseDto> BuildAuthResponse(ApplicationUser user)
+    private async Task<AuthResponseDto> BuildAuthResponseAsync(ApplicationUser user)
     {
-        var claims = await BuildClaimsAsync(user);
-        var accessToken = _jwtService.GenerateAccessToken(claims);
-        var refreshToken = CreateRefreshToken(user.Id);
-
+        var claims        = await BuildClaimsAsync(user);
+        var accessToken   = _jwtService.GenerateAccessToken(claims);
+        var refreshToken  = CreateRefreshToken(user.Id);
         await _userRepository.AddRefreshTokenAsync(refreshToken);
 
         var userDto = await _userRepository.GetUserDtoByIdAsync(user.Id)
@@ -204,22 +196,22 @@ public class AuthController : ControllerBase
 
         return new AuthResponseDto
         {
-            AccessToken = accessToken,
+            AccessToken  = accessToken,
             RefreshToken = refreshToken.Token,
-            ExpiresAt = _jwtService.GetAccessTokenExpiry(),
-            User = userDto
+            ExpiresAt    = _jwtService.GetAccessTokenExpiry(),
+            User         = userDto
         };
     }
 
     private async Task<IEnumerable<Claim>> BuildClaimsAsync(ApplicationUser user)
     {
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles  = await _userManager.GetRolesAsync(user);
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id),
-            new(ClaimTypes.Name, user.UserName ?? string.Empty),
-            new(ClaimTypes.Email, user.Email ?? string.Empty),
-            new("tenant_id", user.TenantId.ToString()),
+            new(ClaimTypes.Name,  user.UserName ?? string.Empty),
+            new(ClaimTypes.Email, user.Email    ?? string.Empty),
+            new("tenant_id",      user.TenantId.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(JwtRegisteredClaimNames.Iat,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
@@ -237,14 +229,11 @@ public class AuthController : ControllerBase
 
     private RefreshToken CreateRefreshToken(string userId) => new()
     {
-        Id = Guid.NewGuid(),
-        Token = _jwtService.GenerateRefreshToken(),
-        ExpiresAt = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays),
-        CreatedAt = DateTime.UtcNow,
+        Id          = Guid.NewGuid(),
+        Token       = _jwtService.GenerateRefreshToken(),
+        ExpiresAt   = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays),
+        CreatedAt   = DateTime.UtcNow,
         CreatedByIp = GetClientIp(),
-        UserId = userId
+        UserId      = userId
     };
-
-    private string? GetClientIp()
-        => HttpContext.Connection.RemoteIpAddress?.ToString();
 }

@@ -1,12 +1,16 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Synthtax.Core.DTOs;
+using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
 
 namespace Synthtax.Infrastructure.Repositories;
 
-public class UserRepository
+/// <summary>
+/// Implementerar IUserRepository. Hanterar användarprofiler och refresh tokens.
+/// </summary>
+public class UserRepository : IUserRepository
 {
     private readonly SynthtaxDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -22,9 +26,7 @@ public class UserRepository
         var user = await _context.Users
             .Include(u => u.Preferences)
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-
         if (user is null) return null;
-
         var roles = await _userManager.GetRolesAsync(user);
         return MapToDto(user, roles);
     }
@@ -34,9 +36,7 @@ public class UserRepository
         var user = await _context.Users
             .Include(u => u.Preferences)
             .FirstOrDefaultAsync(u => u.NormalizedUserName == userName.ToUpperInvariant(), cancellationToken);
-
         if (user is null) return null;
-
         var roles = await _userManager.GetRolesAsync(user);
         return MapToDto(user, roles);
     }
@@ -72,12 +72,12 @@ public class UserRepository
             _context.UserPreferences.Add(prefs);
         }
 
-        prefs.Theme = prefsDto.Theme;
-        prefs.Language = prefsDto.Language;
+        prefs.Theme              = prefsDto.Theme;
+        prefs.Language           = prefsDto.Language;
         prefs.EmailNotifications = prefsDto.EmailNotifications;
-        prefs.ShowMetricsTrend = prefsDto.ShowMetricsTrend;
-        prefs.DefaultPageSize = prefsDto.DefaultPageSize;
-        prefs.UpdatedAt = DateTime.UtcNow;
+        prefs.ShowMetricsTrend   = prefsDto.ShowMetricsTrend;
+        prefs.DefaultPageSize    = prefsDto.DefaultPageSize;
+        prefs.UpdatedAt          = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -86,7 +86,6 @@ public class UserRepository
     {
         var user = await _context.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (user is null) return;
-
         user.LastLoginAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -98,7 +97,6 @@ public class UserRepository
     {
         var user = await _context.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (user is null) return;
-
         user.AllowedModules = modules.Count > 0 ? string.Join(",", modules) : null;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -120,9 +118,9 @@ public class UserRepository
         string? revokedByIp = null,
         CancellationToken cancellationToken = default)
     {
-        token.RevokedAt = DateTime.UtcNow;
+        token.RevokedAt       = DateTime.UtcNow;
         token.ReplacedByToken = replacedBy;
-        token.RevokedByIp = revokedByIp;
+        token.RevokedByIp     = revokedByIp;
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -131,34 +129,32 @@ public class UserRepository
         var tokens = await _context.RefreshTokens
             .Where(r => r.UserId == userId && r.RevokedAt == null)
             .ToListAsync(cancellationToken);
-
         foreach (var token in tokens)
             token.RevokedAt = DateTime.UtcNow;
-
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     private static UserDto MapToDto(ApplicationUser user, IList<string> roles) => new()
     {
-        Id = user.Id,
-        UserName = user.UserName ?? string.Empty,
-        Email = user.Email ?? string.Empty,
-        FullName = user.FullName,
-        Roles = roles.ToList(),
-        IsActive = user.IsActive,
-        CreatedAt = user.CreatedAt,
-        LastLoginAt = user.LastLoginAt,
-        TenantId = user.TenantId,
+        Id           = user.Id,
+        UserName     = user.UserName ?? string.Empty,
+        Email        = user.Email    ?? string.Empty,
+        FullName     = user.FullName,
+        Roles        = roles.ToList(),
+        IsActive     = user.IsActive,
+        CreatedAt    = user.CreatedAt,
+        LastLoginAt  = user.LastLoginAt,
+        TenantId     = user.TenantId,
         AllowedModules = string.IsNullOrEmpty(user.AllowedModules)
             ? new List<string>()
             : user.AllowedModules.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
         Preferences = user.Preferences is null ? null : new UserPreferencesDto
         {
-            Theme = user.Preferences.Theme,
-            Language = user.Preferences.Language,
+            Theme              = user.Preferences.Theme,
+            Language           = user.Preferences.Language,
             EmailNotifications = user.Preferences.EmailNotifications,
-            ShowMetricsTrend = user.Preferences.ShowMetricsTrend,
-            DefaultPageSize = user.Preferences.DefaultPageSize
+            ShowMetricsTrend   = user.Preferences.ShowMetricsTrend,
+            DefaultPageSize    = user.Preferences.DefaultPageSize
         }
     };
 }

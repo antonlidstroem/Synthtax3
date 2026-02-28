@@ -1,87 +1,129 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Build.Locator;
 using Synthtax.API.Extensions;
 using Synthtax.API.Middleware;
-using Synthtax.API.Services.Analysis;
 using Synthtax.Infrastructure;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
-using Synthtax.Infrastructure.Repositories;
+using System.Threading.RateLimiting;
 
 if (!MSBuildLocator.IsRegistered)
     MSBuildLocator.RegisterDefaults();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Infrastructure (EF Core, SQLite cache, repositories) ──────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CRITICAL ORDER: AddIdentity MUST be registered BEFORE AddApiServices.
-//
-// AddIdentity() internally calls AddAuthentication() and sets:
-//   DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme  (cookie)
-//   DefaultChallengeScheme    = IdentityConstants.ApplicationScheme  (cookie)
-//
-// AddApiServices() then calls AddAuthentication() again, which OVERRIDES
-// those defaults with JwtBearerDefaults.AuthenticationScheme.
-//
-// If the order is reversed (Identity after JWT), Identity silently resets
-// the defaults back to cookies — every API call returns 401 even with a
-// valid Bearer token, because ASP.NET Core tries to authenticate via
-// cookie instead of JWT. This was exactly the Swagger/401 bug.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── ASP.NET Identity ───────────────────────────────────────────────────────
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = true;
+    options.Password.RequireDigit           = true;
+    options.Password.RequireLowercase       = true;
+    options.Password.RequireUppercase       = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 8;
-
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    options.Password.RequiredLength         = 8;
+    options.Lockout.DefaultLockoutTimeSpan  = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.AllowedForNewUsers = true;
-
-    options.User.RequireUniqueEmail = true;
-    options.SignIn.RequireConfirmedEmail = false;
+    options.Lockout.AllowedForNewUsers      = true;
+    options.User.RequireUniqueEmail         = true;
+    options.SignIn.RequireConfirmedEmail     = false;
 })
 .AddEntityFrameworkStores<SynthtaxDbContext>()
 .AddDefaultTokenProviders();
 
-// JWT auth + CORS + Swagger — registered AFTER Identity so JWT wins as
-// the default authentication/challenge scheme.
+// ── JWT, CORS, Swagger, controllers ───────────────────────────────────────
 builder.Services.AddApiServices(builder.Configuration);
 
-builder.Services.AddAnalysisServices(); // Roslyn + analysis engine
+// ── Roslyn analysitjänster + bakgrundstjänster ────────────────────────────
+builder.Services.AddAnalysisServices();
+
+// ── Rate limiting (ASP.NET Core 7+) ───────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Tung analys: max 5 requests/minut per IP
+    options.AddFixedWindowLimiter("analysis", o =>
+    {
+        o.PermitLimit             = 5;
+        o.Window                  = TimeSpan.FromMinutes(1);
+        o.QueueProcessingOrder    = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit              = 2;
+    });
+
+    // Auth-endpoints: max 10 requests/minut per IP (skyddar mot brute-force)
+    options.AddFixedWindowLimiter("auth", o =>
+    {
+        o.PermitLimit          = 10;
+        o.Window               = TimeSpan.FromMinutes(1);
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit           = 0;
+    });
+});
+
+// ── Problem Details (RFC 7807) ─────────────────────────────────────────────
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-await Synthtax.Infrastructure.CacheDbInitializer.InitializeAsync(app.Services);
+// ── Global exception handler ──────────────────────────────────────────────
+// Returnerar RFC 7807 ProblemDetails istället för stack traces
+app.UseExceptionHandler(appBuilder =>
+{
+    appBuilder.Run(async ctx =>
+    {
+        var exceptionFeature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var ex      = exceptionFeature?.Error;
+        var logger  = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
 
+        if (ex is not null)
+            logger.LogError(ex, "Unhandled exception for {Method} {Path}",
+                ctx.Request.Method, ctx.Request.Path);
+
+        ctx.Response.StatusCode  = StatusCodes.Status500InternalServerError;
+        ctx.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Status = 500,
+            Title  = "Internal Server Error",
+            // Visa detaljer bara i Development
+            Detail = app.Environment.IsDevelopment() ? ex?.Message : null,
+            Instance = ctx.Request.Path
+        };
+
+        await ctx.Response.WriteAsJsonAsync(problem);
+    });
+});
+
+// ── Database init & seed ───────────────────────────────────────────────────
+await Synthtax.Infrastructure.CacheDbInitializer.InitializeAsync(app.Services);
 await DbSeeder.SeedAsync(app.Services);
 
+// ── Swagger ────────────────────────────────────────────────────────────────
+// Aktiverat i alla miljöer för testbarhet – begränsa åtkomst i produktion
+// via nätverksregler eller autentisering framför /swagger-routen.
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1");
+    c.RoutePrefix = string.Empty;
+});
+
 if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1");
-        c.RoutePrefix = string.Empty; // Swagger på root
-    });
     app.UseDeveloperExceptionPage();
-}
-else
-{
-    app.UseExceptionHandler("/error");
-    app.UseHsts();
-}
 
 if (!app.Environment.IsDevelopment())
 {
+    app.UseHsts();
     app.UseHttpsRedirection();
 }
 
 app.UseCors("SynthtaxPolicy");
+app.UseRateLimiter();
 app.UseAuditLogging();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -89,9 +131,9 @@ app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new
 {
-    Status = "Healthy",
+    Status    = "Healthy",
     Timestamp = DateTime.UtcNow,
-    Version = "1.0.0"
+    Version   = "1.0.0"
 })).AllowAnonymous();
 
 app.Run();

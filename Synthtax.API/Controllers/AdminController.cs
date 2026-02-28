@@ -1,11 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Entities;
-using Synthtax.Infrastructure.Repositories;
 
 namespace Synthtax.API.Controllers;
 
@@ -15,75 +13,65 @@ namespace Synthtax.API.Controllers;
 [Produces("application/json")]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class AdminController : ControllerBase
+public class AdminController : SynthtaxControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly UserRepository _userRepository;
+    private readonly IUserRepository _userRepository;     // ← interface, inte konkret klass
     private readonly IAuditLogRepository _auditLog;
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
         UserManager<ApplicationUser> userManager,
-        UserRepository userRepository,
+        IUserRepository userRepository,
         IAuditLogRepository auditLog,
         ILogger<AdminController> logger)
     {
-        _userManager = userManager;
+        _userManager    = userManager;
         _userRepository = userRepository;
-        _auditLog = auditLog;
-        _logger = logger;
+        _auditLog       = auditLog;
+        _logger         = logger;
     }
 
-    /// <summary>Returns all users within the admin's tenant.</summary>
     [HttpGet("users")]
     [ProducesResponseType(typeof(List<UserDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllUsers()
     {
-        var tenantId = GetTenantId();
-        var users = await _userRepository.GetAllUsersAsync(tenantId);
+        var users = await _userRepository.GetAllUsersAsync(GetTenantId());
         return Ok(users);
     }
 
-    /// <summary>Returns a single user by ID.</summary>
     [HttpGet("users/{userId}")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUser(string userId)
     {
         var user = await _userRepository.GetUserDtoByIdAsync(userId);
         return user is null ? NotFound() : Ok(user);
     }
 
-    /// <summary>Creates a new user and assigns a role.</summary>
     [HttpPost("users")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateUser([FromBody] AdminCreateUserDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var user = new ApplicationUser
         {
-            UserName = dto.UserName,
-            Email = dto.Email,
-            FullName = dto.FullName,
+            UserName       = dto.UserName,
+            Email          = dto.Email,
+            FullName       = dto.FullName,
             EmailConfirmed = true,
-            IsActive = true,
-            TenantId = GetTenantId(),
-            CreatedAt = DateTime.UtcNow,
-            Preferences = new UserPreference
+            IsActive       = true,
+            TenantId       = GetTenantId(),
+            CreatedAt      = DateTime.UtcNow,
+            Preferences    = new UserPreference
             {
-                Theme = "Light",
-                Language = "sv-SE",
+                Theme              = "Light",
+                Language           = "sv-SE",
                 EmailNotifications = true,
-                ShowMetricsTrend = true,
-                DefaultPageSize = 50
+                ShowMetricsTrend   = true,
+                DefaultPageSize    = 50
             }
         };
 
@@ -94,21 +82,18 @@ public class AdminController : ControllerBase
         var role = dto.Role is "Admin" ? "Admin" : "User";
         await _userManager.AddToRoleAsync(user, role);
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, "AdminCreateUser", "User", user.Id,
-            $"Created user: {user.UserName} with role: {role}", GetClientIp(),
-            tenantId: GetTenantId());
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), "AdminCreateUser", "User", user.Id,
+            $"Created user: {user.UserName} with role: {role}",
+            GetClientIp(), tenantId: GetTenantId());
 
         var userDto = await _userRepository.GetUserDtoByIdAsync(user.Id);
         return CreatedAtAction(nameof(GetUser), new { userId = user.Id }, userDto);
     }
 
-    /// <summary>Activates or deactivates a user account.</summary>
     [HttpPatch("users/{userId}/active")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SetUserActive(string userId, [FromBody] SetActiveDto dto)
     {
         var user = await _userManager.FindByIdAsync(userId);
@@ -117,20 +102,17 @@ public class AdminController : ControllerBase
         user.IsActive = dto.IsActive;
         await _userManager.UpdateAsync(user);
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, dto.IsActive ? "ActivateUser" : "DeactivateUser",
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), dto.IsActive ? "ActivateUser" : "DeactivateUser",
             "User", userId, $"User: {user.UserName}", GetClientIp(), tenantId: GetTenantId());
 
         return Ok(new { Message = $"User {(dto.IsActive ? "activated" : "deactivated")}." });
     }
 
-    /// <summary>Permanently deletes a user. Cannot delete yourself.</summary>
     [HttpDelete("users/{userId}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteUser(string userId)
     {
         if (userId == GetCurrentUserId())
@@ -140,53 +122,46 @@ public class AdminController : ControllerBase
         if (user is null) return NotFound();
 
         var userName = user.UserName;
-        var result = await _userManager.DeleteAsync(user);
+        var result   = await _userManager.DeleteAsync(user);
         if (!result.Succeeded)
             return BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, "DeleteUser", "User", userId,
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), "DeleteUser", "User", userId,
             $"Deleted user: {userName}", GetClientIp(), tenantId: GetTenantId());
 
         return Ok(new { Message = $"User '{userName}' deleted." });
     }
 
-    /// <summary>Resets a user's password and revokes all active sessions.</summary>
     [HttpPost("users/reset-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ResetPassword([FromBody] AdminResetPasswordDto dto)
     {
         var user = await _userManager.FindByIdAsync(dto.UserId);
         if (user is null) return NotFound();
 
         var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-        var result = await _userManager.ResetPasswordAsync(user, resetToken, dto.NewPassword);
+        var result     = await _userManager.ResetPasswordAsync(user, resetToken, dto.NewPassword);
         if (!result.Succeeded)
             return BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
 
         await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id);
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, "ResetPassword", "User", user.Id,
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), "ResetPassword", "User", user.Id,
             $"Password reset for: {user.UserName}", GetClientIp(), tenantId: GetTenantId());
 
         return Ok(new { Message = "Password reset successfully. All existing sessions revoked." });
     }
 
-    /// <summary>Updates which modules a user has access to.</summary>
     [HttpPatch("users/{userId}/modules")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateUserModules(
         string userId, [FromBody] UpdateUserModulesDto dto)
     {
-        // Always prefer the route parameter over whatever was in the body
         if (!string.IsNullOrWhiteSpace(userId))
             dto.UserId = userId;
 
@@ -195,21 +170,18 @@ public class AdminController : ControllerBase
 
         await _userRepository.UpdateAllowedModulesAsync(dto.UserId, dto.AllowedModules);
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, "UpdateModuleAccess", "User", dto.UserId,
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), "UpdateModuleAccess", "User", dto.UserId,
             $"Modules set to: {string.Join(", ", dto.AllowedModules)}",
             GetClientIp(), tenantId: GetTenantId());
 
         return Ok(new { Message = "Module access updated." });
     }
 
-    /// <summary>Changes a user's role. Cannot change your own role.</summary>
     [HttpPut("users/{userId}/role")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateUserRole(string userId, [FromBody] UpdateRoleDto dto)
     {
         if (userId == GetCurrentUserId())
@@ -224,48 +196,19 @@ public class AdminController : ControllerBase
         var newRole = dto.Role is "Admin" ? "Admin" : "User";
         await _userManager.AddToRoleAsync(user, newRole);
 
-        var adminId = GetCurrentUserId();
-        await _auditLog.LogAsync(adminId, "UpdateRole", "User", userId,
+        await _auditLog.LogAsync(
+            GetCurrentUserId(), "UpdateRole", "User", userId,
             $"Role changed to: {newRole} for {user.UserName}",
             GetClientIp(), tenantId: GetTenantId());
 
         return Ok(new { Message = $"Role updated to '{newRole}'." });
     }
 
-    /// <summary>Returns a paged audit log filtered by tenant.</summary>
     [HttpGet("audit-log")]
     [ProducesResponseType(typeof(PagedResultDto<AuditLogDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAuditLog([FromQuery] AuditLogQueryDto query)
     {
-        var tenantId = GetTenantId();
-        var result = await _auditLog.GetPagedAsync(query, tenantId);
+        var result = await _auditLog.GetPagedAsync(query, GetTenantId());
         return Ok(result);
     }
-
-    private string GetCurrentUserId()
-        => User.FindFirstValue(ClaimTypes.NameIdentifier)
-           ?? throw new UnauthorizedAccessException("User ID claim not found.");
-
-    private Guid GetTenantId()
-    {
-        var tenantClaim = User.FindFirstValue("tenant_id");
-        return tenantClaim is not null && Guid.TryParse(tenantClaim, out var guid)
-            ? guid
-            : Guid.Empty;
-    }
-
-    private string? GetClientIp()
-        => HttpContext.Connection.RemoteIpAddress?.ToString();
-}
-
-public class SetActiveDto
-{
-    public bool IsActive { get; set; }
-}
-
-public class UpdateRoleDto
-{
-    public string Role { get; set; } = "User";
 }

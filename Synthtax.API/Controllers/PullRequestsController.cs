@@ -5,13 +5,13 @@ using Synthtax.Core.DTOs;
 namespace Synthtax.API.Controllers;
 
 /// <summary>
-/// Pull Request-integration (stub).
-/// Returnerar demo-data eller vidarebefordrar till konfigurerad Git-forge (GitHub/GitLab/Azure DevOps).
-/// Implementera IForgeClient och registrera i DI för riktig integration.
+/// Placeholder för forge-integration (GitHub, GitLab, Azure DevOps).
+/// Returnerar 501 Not Implemented tills integrationen är implementerad.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[Produces("application/json")]
 public class PullRequestsController : ControllerBase
 {
     private readonly ILogger<PullRequestsController> _logger;
@@ -21,28 +21,46 @@ public class PullRequestsController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Hämtar pull requests för ett repository. Returnerar tom lista om ingen integration är konfigurerad.</summary>
+    /// <summary>
+    /// Lista pull requests för ett repository.
+    /// OBS: Forge-integration är inte implementerad ännu.
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<PullRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     public IActionResult GetPullRequests(
         [FromQuery] string? repositoryUrl,
         [FromQuery] string? status,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        _logger.LogInformation("PR request for repository: {Url}", repositoryUrl);
+        _logger.LogInformation("PR request for repository: {Url} – not yet implemented", repositoryUrl);
 
-        // No forge integration configured → return empty list;
-        // WPF client will use built-in demo data when empty.
-        return Ok(new List<PullRequestDto>());
+        return StatusCode(StatusCodes.Status501NotImplemented, new
+        {
+            Message       = "Pull request integration is not yet configured.",
+            SupportedForges = new[] { "GitHub", "GitLab", "Azure DevOps" },
+            Documentation = "Configure forge integration in appsettings.json under 'ForgeIntegration'.",
+            // Returneras så klienter kan skilja på 'feature unavailable' vs 'no PRs found'
+            IsPlaceholder = true
+        });
     }
 
-    /// <summary>Hämtar en specifik pull request.</summary>
+    /// <summary>
+    /// Hämta en specifik pull request.
+    /// OBS: Forge-integration är inte implementerad ännu.
+    /// </summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(PullRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     public IActionResult GetPullRequest(int id)
     {
-        return NotFound(new { Message = "Forge-integration ej konfigurerad." });
+        return StatusCode(StatusCodes.Status501NotImplemented, new
+        {
+            Message       = "Pull request integration is not yet configured.",
+            SupportedForges = new[] { "GitHub", "GitLab", "Azure DevOps" },
+            IsPlaceholder = true
+        });
     }
 }

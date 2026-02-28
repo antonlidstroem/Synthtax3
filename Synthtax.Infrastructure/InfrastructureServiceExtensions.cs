@@ -1,10 +1,6 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Data;
-using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Repositories;
 
 namespace Synthtax.Infrastructure;
@@ -15,46 +11,28 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // ── Main SQL Server database (unchanged) ─────────────────────────────
+        // ── SQL Server (huvud-databas) ─────────────────────────────────────────
         services.AddDbContext<SynthtaxDbContext>(options =>
-        {
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
-                sql =>
-                {
-                    sql.MigrationsAssembly(typeof(SynthtaxDbContext).Assembly.FullName);
-                    sql.EnableRetryOnFailure(
-                        maxRetryCount: 5,
-                        maxRetryDelay: TimeSpan.FromSeconds(30),
-                        errorNumbersToAdd: null);
-                });
-            if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
-                options.EnableSensitiveDataLogging().EnableDetailedErrors();
-        });
+                sql => sql.MigrationsAssembly("Synthtax.Infrastructure")));
 
-        // ── NEW: SQLite analysis cache database ──────────────────────────────
-        // Stored in a configurable path; defaults to the app's data directory.
-        var cachePath = configuration["AnalysisCache:DatabasePath"]
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Synthtax",
-                "analysis-cache.db");
-
-        // Ensure directory exists
-        var cacheDir = Path.GetDirectoryName(cachePath)!;
-        Directory.CreateDirectory(cacheDir);
-
+        // ── SQLite (analyscache) ──────────────────────────────────────────────
         services.AddDbContext<AnalysisCacheDbContext>(options =>
-        {
-            options.UseSqlite($"Data Source={cachePath}");
-        });
+            options.UseSqlite("Data Source=synthtax_cache.db"));
 
-        services.AddScoped<IAnalysisCacheService, AnalysisCacheRepository>();
+        // ── Repositories ──────────────────────────────────────────────────────
+        services.AddScoped<IAnalysisCacheService,  AnalysisCacheRepository>();
+        services.AddScoped<IBacklogRepository,     BacklogRepository>();
+        services.AddScoped<IAuditLogRepository,    AuditLogRepository>();
 
-        // ── Existing repositories (unchanged) ────────────────────────────────
-        services.AddScoped<IBacklogRepository, BacklogRepository>();
-        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-        services.AddScoped<UserRepository>();
+        // IUserRepository registreras nu korrekt via interface
+        services.AddScoped<IUserRepository,        UserRepository>();
+
+        // Behåll direkt-registrering för bakåtkompatibilitet tills alla controllers är uppdaterade
+        // (kan tas bort när AdminController, AuthController och UsersController är deployade)
+        services.AddScoped<UserRepository>(sp => (UserRepository)sp.GetRequiredService<IUserRepository>());
+
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 
         return services;
