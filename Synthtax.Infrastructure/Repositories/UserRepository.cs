@@ -7,9 +7,6 @@ using Synthtax.Infrastructure.Entities;
 
 namespace Synthtax.Infrastructure.Repositories;
 
-/// <summary>
-/// Implementerar IUserRepository. Hanterar användarprofiler och refresh tokens.
-/// </summary>
 public class UserRepository : IUserRepository
 {
     private readonly SynthtaxDbContext _context;
@@ -17,11 +14,12 @@ public class UserRepository : IUserRepository
 
     public UserRepository(SynthtaxDbContext context, UserManager<ApplicationUser> userManager)
     {
-        _context = context;
+        _context     = context;
         _userManager = userManager;
     }
 
-    public async Task<UserDto?> GetUserDtoByIdAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<UserDto?> GetUserDtoByIdAsync(
+        string userId, CancellationToken cancellationToken = default)
     {
         var user = await _context.Users
             .Include(u => u.Preferences)
@@ -31,7 +29,8 @@ public class UserRepository : IUserRepository
         return MapToDto(user, roles);
     }
 
-    public async Task<UserDto?> GetUserDtoByNameAsync(string userName, CancellationToken cancellationToken = default)
+    public async Task<UserDto?> GetUserDtoByNameAsync(
+        string userName, CancellationToken cancellationToken = default)
     {
         var user = await _context.Users
             .Include(u => u.Preferences)
@@ -41,7 +40,8 @@ public class UserRepository : IUserRepository
         return MapToDto(user, roles);
     }
 
-    public async Task<List<UserDto>> GetAllUsersAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    public async Task<List<UserDto>> GetAllUsersAsync(
+        Guid tenantId, CancellationToken cancellationToken = default)
     {
         var users = await _context.Users
             .Include(u => u.Preferences)
@@ -59,9 +59,7 @@ public class UserRepository : IUserRepository
     }
 
     public async Task UpdatePreferencesAsync(
-        string userId,
-        UserPreferencesDto prefsDto,
-        CancellationToken cancellationToken = default)
+        string userId, UserPreferencesDto prefsDto, CancellationToken cancellationToken = default)
     {
         var prefs = await _context.UserPreferences
             .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
@@ -78,11 +76,11 @@ public class UserRepository : IUserRepository
         prefs.ShowMetricsTrend   = prefsDto.ShowMetricsTrend;
         prefs.DefaultPageSize    = prefsDto.DefaultPageSize;
         prefs.UpdatedAt          = DateTime.UtcNow;
-
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpdateLastLoginAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task UpdateLastLoginAsync(
+        string userId, CancellationToken cancellationToken = default)
     {
         var user = await _context.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (user is null) return;
@@ -91,9 +89,7 @@ public class UserRepository : IUserRepository
     }
 
     public async Task UpdateAllowedModulesAsync(
-        string userId,
-        List<string> modules,
-        CancellationToken cancellationToken = default)
+        string userId, List<string> modules, CancellationToken cancellationToken = default)
     {
         var user = await _context.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (user is null) return;
@@ -101,60 +97,91 @@ public class UserRepository : IUserRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default)
-        => await _context.RefreshTokens
-            .Include(r => r.User)
+    // ── Refresh token – map between EF entity and Core DTO ────────────────────
+
+    public async Task<RefreshTokenInfoDto?> GetRefreshTokenAsync(
+        string token, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.RefreshTokens
             .FirstOrDefaultAsync(r => r.Token == token, cancellationToken);
 
-    public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken = default)
+        return entity is null ? null : MapToInfoDto(entity);
+    }
+
+    public async Task AddRefreshTokenAsync(
+        RefreshTokenInfoDto dto, CancellationToken cancellationToken = default)
     {
-        _context.RefreshTokens.Add(token);
+        _context.RefreshTokens.Add(MapToEntity(dto));
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task RevokeRefreshTokenAsync(
-        RefreshToken token,
+        RefreshTokenInfoDto dto,
         string? replacedBy = null,
         string? revokedByIp = null,
         CancellationToken cancellationToken = default)
     {
-        token.RevokedAt       = DateTime.UtcNow;
-        token.ReplacedByToken = replacedBy;
-        token.RevokedByIp     = revokedByIp;
+        var entity = await _context.RefreshTokens
+            .FirstOrDefaultAsync(r => r.Token == dto.Token, cancellationToken);
+
+        if (entity is null) return;
+
+        entity.RevokedAt       = DateTime.UtcNow;
+        entity.ReplacedByToken = replacedBy;
+        entity.RevokedByIp     = revokedByIp;
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RevokeAllRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task RevokeAllRefreshTokensForUserAsync(
+        string userId, CancellationToken cancellationToken = default)
     {
         var tokens = await _context.RefreshTokens
             .Where(r => r.UserId == userId && r.RevokedAt == null)
             .ToListAsync(cancellationToken);
-        foreach (var token in tokens)
-            token.RevokedAt = DateTime.UtcNow;
+
+        foreach (var t in tokens)
+            t.RevokedAt = DateTime.UtcNow;
+
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    // ── Mapping helpers ────────────────────────────────────────────────────────
+
+    private static RefreshTokenInfoDto MapToInfoDto(RefreshToken e) => new()
+    {
+        Id              = e.Id,
+        Token           = e.Token,
+        UserId          = e.UserId,
+        ExpiresAt       = e.ExpiresAt,
+        CreatedAt       = e.CreatedAt,
+        CreatedByIp     = e.CreatedByIp,
+        RevokedAt       = e.RevokedAt,
+        RevokedByIp     = e.RevokedByIp,
+        ReplacedByToken = e.ReplacedByToken
+    };
+
+    private static RefreshToken MapToEntity(RefreshTokenInfoDto d) => new()
+    {
+        Id              = d.Id == Guid.Empty ? Guid.NewGuid() : d.Id,
+        Token           = d.Token,
+        UserId          = d.UserId,
+        ExpiresAt       = d.ExpiresAt,
+        CreatedAt       = d.CreatedAt,
+        CreatedByIp     = d.CreatedByIp,
+        RevokedAt       = d.RevokedAt,
+        RevokedByIp     = d.RevokedByIp,
+        ReplacedByToken = d.ReplacedByToken
+    };
+
     private static UserDto MapToDto(ApplicationUser user, IList<string> roles) => new()
     {
-        Id           = user.Id,
-        UserName     = user.UserName ?? string.Empty,
-        Email        = user.Email    ?? string.Empty,
-        FullName     = user.FullName,
-        Roles        = roles.ToList(),
-        IsActive     = user.IsActive,
-        CreatedAt    = user.CreatedAt,
-        LastLoginAt  = user.LastLoginAt,
-        TenantId     = user.TenantId,
-        AllowedModules = string.IsNullOrEmpty(user.AllowedModules)
-            ? new List<string>()
-            : user.AllowedModules.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-        Preferences = user.Preferences is null ? null : new UserPreferencesDto
-        {
-            Theme              = user.Preferences.Theme,
-            Language           = user.Preferences.Language,
-            EmailNotifications = user.Preferences.EmailNotifications,
-            ShowMetricsTrend   = user.Preferences.ShowMetricsTrend,
-            DefaultPageSize    = user.Preferences.DefaultPageSize
-        }
+        Id          = user.Id,
+        UserName    = user.UserName ?? string.Empty,
+        Email       = user.Email    ?? string.Empty,
+        FullName    = user.FullName,
+        Roles       = roles.ToList(),
+        IsActive    = user.IsActive,
+        CreatedAt   = user.CreatedAt,
+        LastLoginAt = user.LastLoginAt,
     };
 }

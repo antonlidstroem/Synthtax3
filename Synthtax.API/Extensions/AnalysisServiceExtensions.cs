@@ -1,7 +1,11 @@
 using Synthtax.API.Services;
-using Synthtax.API.Services.Analysis;
+
 using Synthtax.API.Services.Background;
 using Synthtax.Core.Interfaces;
+using Synthtax.Analysis;
+using Synthtax.Analysis.Pipeline;
+using Synthtax.Analysis.Services;
+using Synthtax.Analysis.Workspace;
 
 namespace Synthtax.API.Extensions;
 
@@ -10,18 +14,20 @@ public static class AnalysisServiceExtensions
     public static IServiceCollection AddAnalysisServices(this IServiceCollection services)
     {
         // ── Roslyn analysitjänster ────────────────────────────────────────────
-        services.AddScoped<ICodeAnalysisService,       CodeAnalysisService>();
-        services.AddScoped<IMetricsService,            MetricsService>();
-        services.AddScoped<IMethodExplorerService,     MethodExplorerService>();
-        services.AddScoped<ICommentExplorerService,    CommentExplorerService>();
-        services.AddScoped<IStructureAnalysisService,  StructureAnalysisService>();
-        services.AddScoped<IGitAnalysisService,        GitAnalysisService>();
-        services.AddScoped<ISecurityAnalysisService,   SecurityAnalysisService>();
-        services.AddScoped<IAIDetectionService,        AIDetectionService>();
-        services.AddScoped<ICouplingAnalysisService,   CouplingAnalysisService>();
-        services.AddScoped<IRefactoringService,        RefactoringService>();
+        //services.AddScoped<ICodeAnalysisService,       CodeAnalysisService>();
+        //services.AddScoped<IMetricsService,            MetricsService>();
+        //services.AddScoped<IMethodExplorerService,     MethodExplorerService>();
+        //services.AddScoped<ICommentExplorerService,    CommentExplorerService>();
+        //services.AddScoped<IStructureAnalysisService,  StructureAnalysisService>();
+        //services.AddScoped<IGitAnalysisService,        GitAnalysisService>();
+        //services.AddScoped<ISecurityAnalysisService,   SecurityAnalysisService>();
+        //services.AddScoped<IAIDetectionService,        AIDetectionService>();
+        //services.AddScoped<ICouplingAnalysisService,   CouplingAnalysisService>();
+        //services.AddScoped<IRefactoringService,        RefactoringService>();
 
         // ── Workspace / pipeline ──────────────────────────────────────────────
+        services.AddSynthtaxAnalysis();
+
         services.AddScoped<IRoslynWorkspaceService,    RoslynWorkspaceService>();
         services.AddScoped<ISolutionAnalysisPipeline,  SolutionAnalysisPipeline>();
 

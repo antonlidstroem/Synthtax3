@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Repositories;

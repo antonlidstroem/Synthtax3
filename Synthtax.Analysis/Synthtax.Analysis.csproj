@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Synthtax.Analysis</RootNamespace>
+    <AssemblyName>Synthtax.Analysis</AssemblyName>
+    <Description>Synthtax code analysis engine. Pure class library – no ASP.NET, no EF Core, no infrastructure dependencies. Can be referenced by desktop clients (WPF) for local analysis or by the API for server-side analysis.</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn / MSBuild Workspace -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"                Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"     Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild"    Version="4.8.0" />
+    <PackageReference Include="Microsoft.Build.Locator"                      Version="1.7.8" />
+
+    <!-- Git -->
+    <PackageReference Include="LibGit2Sharp"                                 Version="0.30.0" />
+
+    <!-- Logging abstraction only – consumers provide the implementation -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"   Version="8.0.0" />
+
+    <!-- DI registration helper (AddSingleton/AddScoped etc.) – lightweight -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- DTOs, enums and shared interfaces live in Core -->
+    <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+  </ItemGroup>
+
+</Project>

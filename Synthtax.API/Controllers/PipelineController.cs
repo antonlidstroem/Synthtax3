@@ -53,9 +53,5 @@ namespace Synthtax.API.Controllers
         }
     }
 
-    public class PipelineRequestDto
-    {
-        public string? SolutionPath { get; set; }
-        public FullAnalysisOptions? Options { get; set; }
-    }
+
 }

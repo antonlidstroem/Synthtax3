@@ -1,3 +1,5 @@
+using Synthtax.Core.Interfaces;
+
 namespace Synthtax.Core.DTOs;
 
 /// <summary>
@@ -86,11 +88,3 @@ public class PipelineRequestDto
 /// <summary>
 /// Alternativ för fullständig pipeline-analys.
 /// </summary>
-public class FullAnalysisOptions
-{
-    public bool IncludeCode { get; set; } = true;
-    public bool IncludeSecurity { get; set; } = true;
-    public bool IncludeMetrics { get; set; } = true;
-    public bool IncludeCoupling { get; set; } = true;
-    public bool IncludeAIDetection { get; set; } = false;
-}

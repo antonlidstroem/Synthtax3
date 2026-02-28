@@ -1,10 +1,9 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Synthtax.API.Extensions;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Entities;
@@ -19,7 +18,7 @@ public class AuthController : SynthtaxControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IJwtService _jwtService;
-    private readonly IUserRepository _userRepository;    // ← interface
+    private readonly IUserRepository _userRepository;
     private readonly IAuditLogRepository _auditLog;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthController> _logger;
@@ -74,13 +73,10 @@ public class AuthController : SynthtaxControllerBase
             return BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
 
         await _userManager.AddToRoleAsync(user, "User");
-
         var response = await BuildAuthResponseAsync(user);
-
         await _auditLog.LogAsync(user.Id, "Register", "User", user.Id,
             $"New user registered: {user.UserName}", GetClientIp());
 
-        // Pekar på GET /api/users/me istället för på sig själv
         return Created("/api/users/me", response);
     }
 
@@ -116,7 +112,6 @@ public class AuthController : SynthtaxControllerBase
 
         await _userRepository.UpdateLastLoginAsync(user.Id);
         var response = await BuildAuthResponseAsync(user);
-
         await _auditLog.LogAsync(user.Id, "Login", "User", user.Id,
             $"Successful login: {user.UserName}", GetClientIp());
 
@@ -133,8 +128,9 @@ public class AuthController : SynthtaxControllerBase
         if (storedToken is null || !storedToken.IsActive)
             return Unauthorized(new { Message = "Invalid or expired refresh token." });
 
-        var user = storedToken.User;
-        if (!user.IsActive)
+        // Load user via UserManager – DTO has no navigation property
+        var user = await _userManager.FindByIdAsync(storedToken.UserId);
+        if (user is null || !user.IsActive)
             return Unauthorized(new { Message = "User account is inactive." });
 
         var newRefreshToken = CreateRefreshToken(user.Id);
@@ -179,16 +175,17 @@ public class AuthController : SynthtaxControllerBase
         await _userRepository.RevokeAllRefreshTokensForUserAsync(userId);
         await _auditLog.LogAsync(userId, "LogoutAll", "User", userId,
             "Revoked all sessions", GetClientIp());
+
         return Ok(new { Message = "All sessions revoked." });
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // ── Private helpers ────────────────────────────────────────────────────────
 
     private async Task<AuthResponseDto> BuildAuthResponseAsync(ApplicationUser user)
     {
-        var claims        = await BuildClaimsAsync(user);
-        var accessToken   = _jwtService.GenerateAccessToken(claims);
-        var refreshToken  = CreateRefreshToken(user.Id);
+        var claims       = await BuildClaimsAsync(user);
+        var accessToken  = _jwtService.GenerateAccessToken(claims);
+        var refreshToken = CreateRefreshToken(user.Id);
         await _userRepository.AddRefreshTokenAsync(refreshToken);
 
         var userDto = await _userRepository.GetUserDtoByIdAsync(user.Id)
@@ -227,13 +224,14 @@ public class AuthController : SynthtaxControllerBase
         return claims;
     }
 
-    private RefreshToken CreateRefreshToken(string userId) => new()
+    /// <summary>Creates a new RefreshTokenInfoDto ready to be persisted.</summary>
+    private RefreshTokenInfoDto CreateRefreshToken(string userId) => new()
     {
         Id          = Guid.NewGuid(),
         Token       = _jwtService.GenerateRefreshToken(),
+        UserId      = userId,
         ExpiresAt   = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays),
         CreatedAt   = DateTime.UtcNow,
-        CreatedByIp = GetClientIp(),
-        UserId      = userId
+        CreatedByIp = GetClientIp()
     };
 }

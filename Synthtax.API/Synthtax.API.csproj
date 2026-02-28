@@ -47,9 +47,13 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
-    <ProjectReference Include="..\Synthtax.Infrastructure\Synthtax.Infrastructure.csproj" />
-  </ItemGroup>
+
+
+	<ItemGroup>
+		<ProjectReference Include="..\Synthtax.Analysis\Synthtax.Analysis.csproj" />
+		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+		<ProjectReference Include="..\Synthtax.Infrastructure\Synthtax.Infrastructure.csproj" />
+	</ItemGroup>
+	
 
 </Project>

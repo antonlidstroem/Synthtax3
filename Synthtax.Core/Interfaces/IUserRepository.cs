@@ -1,13 +1,7 @@
 using Synthtax.Core.DTOs;
-using Synthtax.Infrastructure.Entities;
-
 
 namespace Synthtax.Core.Interfaces;
 
-/// <summary>
-/// Interface för användarhantering och refresh token-operationer.
-/// Gör UserRepository testbar och löskopplad från controllers.
-/// </summary>
 public interface IUserRepository
 {
     Task<UserDto?> GetUserDtoByIdAsync(string userId, CancellationToken cancellationToken = default);
@@ -16,8 +10,10 @@ public interface IUserRepository
     Task UpdatePreferencesAsync(string userId, UserPreferencesDto prefsDto, CancellationToken cancellationToken = default);
     Task UpdateLastLoginAsync(string userId, CancellationToken cancellationToken = default);
     Task UpdateAllowedModulesAsync(string userId, List<string> modules, CancellationToken cancellationToken = default);
-    Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default);
-    Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken = default);
-    Task RevokeRefreshTokenAsync(RefreshToken token, string? replacedBy = null, string? revokedByIp = null, CancellationToken cancellationToken = default);
+
+    // Refresh token management – uses RefreshTokenInfoDto (Core), not the EF entity (Infrastructure)
+    Task<RefreshTokenInfoDto?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default);
+    Task AddRefreshTokenAsync(RefreshTokenInfoDto token, CancellationToken cancellationToken = default);
+    Task RevokeRefreshTokenAsync(RefreshTokenInfoDto token, string? replacedBy = null, string? revokedByIp = null, CancellationToken cancellationToken = default);
     Task RevokeAllRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken = default);
 }
