@@ -130,6 +130,10 @@ public class BacklogItem : AuditableEntity, ISoftDeletable
     public Guid   ProjectId { get; set; }
     public string RuleId    { get; set; } = string.Empty;
 
+    public bool AutoClosed { get; set; }
+    public Guid? AutoClosedInSessionId { get; set; }
+    public Guid? ReopenedInSessionId { get; set; }
+
     /// <summary>
     /// SHA-256-fingerprint som unikt identifierar denna issue inom projektet.
     /// Beräknas av <see cref="Synthtax.Domain.Services.FingerprintService"/>:
