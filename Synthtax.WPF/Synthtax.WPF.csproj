@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <!-- MVVM -->
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="9.2.2" />
 
     <!-- Charts -->
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.0-rc2" />
@@ -39,6 +39,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Synthtax.Analysis\Synthtax.Analysis.csproj" />
+    <ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
     <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
   </ItemGroup>
 

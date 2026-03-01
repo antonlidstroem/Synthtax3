@@ -20,11 +20,8 @@
     <!-- Git -->
     <PackageReference Include="LibGit2Sharp"                                 Version="0.30.0" />
 
-    <!-- Logging abstraction only – consumers provide the implementation -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"   Version="8.0.0" />
-
-    <!-- DI registration helper (AddSingleton/AddScoped etc.) – lightweight -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+	  <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

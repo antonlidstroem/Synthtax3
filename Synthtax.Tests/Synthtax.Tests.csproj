@@ -15,6 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Synthtax.Analysis\Synthtax.Analysis.csproj" />
+    <ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
+    <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

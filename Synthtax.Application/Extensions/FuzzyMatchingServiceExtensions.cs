@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Application.Orchestration;
-using Synthtax.Core.FuzzyMatching;
-using Synthtax.Core.Tokenization;
+
 
 namespace Synthtax.Application.Extensions;
 
