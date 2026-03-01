@@ -7,6 +7,7 @@ using Synthtax.API.Middleware;
 using Synthtax.Infrastructure;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
+using Synthtax.Infrastructure.Extensions;
 using System.Threading.RateLimiting;
 
 if (!MSBuildLocator.IsRegistered)

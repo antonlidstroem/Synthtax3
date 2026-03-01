@@ -1,3 +1,4 @@
+using Microsoft.Build.Framework;
 using Microsoft.Extensions.Logging;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Normalization;
