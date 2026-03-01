@@ -14,10 +14,8 @@ if (!MSBuildLocator.IsRegistered)
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Infrastructure (EF Core, SQLite cache, repositories) ──────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// ── ASP.NET Identity ───────────────────────────────────────────────────────
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.Password.RequireDigit           = true;
@@ -34,27 +32,25 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<SynthtaxDbContext>()
 .AddDefaultTokenProviders();
 
-// ── JWT, CORS, Swagger, controllers ───────────────────────────────────────
 builder.Services.AddApiServices(builder.Configuration);
-
-// ── Roslyn analysitjänster + bakgrundstjänster ────────────────────────────
 builder.Services.AddAnalysisServices();
 
-// ── Rate limiting (ASP.NET Core 7+) ───────────────────────────────────────
+builder.Services.AddDomainInfrastructure(builder.Configuration);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Tung analys: max 5 requests/minut per IP
+    // Analys-endpoints: 5 requests/minut med kö
     options.AddFixedWindowLimiter("analysis", o =>
     {
-        o.PermitLimit             = 5;
-        o.Window                  = TimeSpan.FromMinutes(1);
-        o.QueueProcessingOrder    = QueueProcessingOrder.OldestFirst;
-        o.QueueLimit              = 2;
+        o.PermitLimit          = 5;
+        o.Window               = TimeSpan.FromMinutes(1);
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit           = 2;
     });
 
-    // Auth-endpoints: max 10 requests/minut per IP (skyddar mot brute-force)
+    // Auth-endpoints: 10 requests/minut utan kö (brute-force skydd)
     options.AddFixedWindowLimiter("auth", o =>
     {
         o.PermitLimit          = 10;
@@ -64,20 +60,17 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// ── Problem Details (RFC 7807) ─────────────────────────────────────────────
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// ── Global exception handler ──────────────────────────────────────────────
-// Returnerar RFC 7807 ProblemDetails istället för stack traces
 app.UseExceptionHandler(appBuilder =>
 {
     appBuilder.Run(async ctx =>
     {
         var exceptionFeature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
-        var ex      = exceptionFeature?.Error;
-        var logger  = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+        var ex     = exceptionFeature?.Error;
+        var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
 
         if (ex is not null)
             logger.LogError(ex, "Unhandled exception for {Method} {Path}",
@@ -85,38 +78,33 @@ app.UseExceptionHandler(appBuilder =>
 
         ctx.Response.StatusCode  = StatusCodes.Status500InternalServerError;
         ctx.Response.ContentType = "application/problem+json";
-
         var problem = new ProblemDetails
         {
-            Status = 500,
-            Title  = "Internal Server Error",
-            // Visa detaljer bara i Development
-            Detail = app.Environment.IsDevelopment() ? ex?.Message : null,
+            Status   = 500,
+            Title    = "Internal Server Error",
+            Detail   = app.Environment.IsDevelopment() ? ex?.Message : null,
             Instance = ctx.Request.Path
         };
-
         await ctx.Response.WriteAsJsonAsync(problem);
     });
 });
 
-// ── Database init & seed ───────────────────────────────────────────────────
 await Synthtax.Infrastructure.CacheDbInitializer.InitializeAsync(app.Services);
 await DbSeeder.SeedAsync(app.Services);
 
-// ── Swagger ────────────────────────────────────────────────────────────────
-// Aktiverat i alla miljöer för testbarhet – begränsa åtkomst i produktion
-// via nätverksregler eller autentisering framför /swagger-routen.
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1");
-    c.RoutePrefix = string.Empty;
-});
-
+// SEC-04 FIX: Swagger exponeras nu ENBART i Development.
+// Tidigare låg UseSwagger() utanför IsDevelopment-blocket.
 if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1");
+        c.RoutePrefix = string.Empty;
+    });
     app.UseDeveloperExceptionPage();
-
-if (!app.Environment.IsDevelopment())
+}
+else
 {
     app.UseHsts();
     app.UseHttpsRedirection();
@@ -133,7 +121,15 @@ app.MapGet("/health", () => Results.Ok(new
 {
     Status    = "Healthy",
     Timestamp = DateTime.UtcNow,
-    Version   = "1.0.0"
+    // ARCH-05 FIX: Dynamisk version istället för hårdkodad "1.0.0"
+    Version   = System.Reflection.Assembly.GetEntryAssembly()
+                    ?.GetName().Version?.ToString() ?? "1.0.0"
 })).AllowAnonymous();
+
+// SEC-05 FIX: Rate limiting är nu faktiskt APPLICERAT.
+// [EnableRateLimiting("analysis")] läggs i AnalysisController, CodeController,
+// SecurityController, PipelineController, MetricsController, CouplingController.
+// [EnableRateLimiting("auth")] läggs i AuthController.
+// Se respektive controller-fix.
 
 app.Run();

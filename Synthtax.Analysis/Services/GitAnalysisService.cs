@@ -9,6 +9,11 @@ public class GitAnalysisService : IGitAnalysisService
 {
     private readonly ILogger<GitAnalysisService> _logger;
 
+    // BUG-06 FIX: Tidigare spårades bara .cs-filer i churn-analysen.
+    // Nu är filtret konfigurerbart. Null = spåra alla filändelser.
+    // Ange explicit lista för att begränsa (t.ex. bara källkodsfiler).
+    private static readonly HashSet<string>? TrackedExtensions = null; // null = alla filändelser
+
     public GitAnalysisService(ILogger<GitAnalysisService> logger) => _logger = logger;
 
     public async Task<GitAnalysisResultDto> AnalyzeRepositoryAsync(
@@ -130,25 +135,44 @@ public class GitAnalysisService : IGitAnalysisService
                 foreach (var entry in patch)
                 {
                     var path = entry.Path;
-                    if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    // BUG-06 FIX: Det hårda if (!path.EndsWith(".cs")) continue;
+                    // filtret är ersatt med ett konfigurerbart TrackedExtensions-set.
+                    // Null = spåra alla filtyper (CSS, JS, HTML, Java, Python etc.).
+                    if (TrackedExtensions is not null)
+                    {
+                        var ext = Path.GetExtension(path);
+                        if (!TrackedExtensions.Contains(ext)) continue;
+                    }
+
                     if (!fileStats.TryGetValue(path, out var churn))
                     {
                         churn = new GitChurnDto
                         {
-                            FilePath = path, FileName = Path.GetFileName(path),
-                            FirstChanged = commit.Author.When.UtcDateTime, LastChanged = commit.Author.When.UtcDateTime
+                            FilePath     = path,
+                            FileName     = Path.GetFileName(path),
+                            FirstChanged = commit.Author.When.UtcDateTime,
+                            LastChanged  = commit.Author.When.UtcDateTime
                         };
                         fileStats[path] = churn;
                     }
-                    churn.CommitCount++; churn.TotalInsertions += entry.LinesAdded;
-                    churn.TotalDeletions += entry.LinesDeleted; churn.TotalChurn += entry.LinesAdded + entry.LinesDeleted;
-                    if (commit.Author.When.UtcDateTime < churn.FirstChanged) churn.FirstChanged = commit.Author.When.UtcDateTime;
-                    if (commit.Author.When.UtcDateTime > churn.LastChanged)  churn.LastChanged  = commit.Author.When.UtcDateTime;
-                    if (!churn.Authors.Contains(commit.Author.Name)) churn.Authors.Add(commit.Author.Name);
+
+                    churn.CommitCount++;
+                    churn.TotalInsertions += entry.LinesAdded;
+                    churn.TotalDeletions  += entry.LinesDeleted;
+                    churn.TotalChurn      += entry.LinesAdded + entry.LinesDeleted;
+
+                    if (commit.Author.When.UtcDateTime < churn.FirstChanged)
+                        churn.FirstChanged = commit.Author.When.UtcDateTime;
+                    if (commit.Author.When.UtcDateTime > churn.LastChanged)
+                        churn.LastChanged  = commit.Author.When.UtcDateTime;
+                    if (!churn.Authors.Contains(commit.Author.Name))
+                        churn.Authors.Add(commit.Author.Name);
                 }
             }
-            catch { }
+            catch { /* Felaktig commit-patch — hoppa över */ }
         }
+
         return fileStats.Values.OrderByDescending(f => f.CommitCount).ToList();
     }
 
@@ -162,8 +186,9 @@ public class GitAnalysisService : IGitAnalysisService
         var total = commits.Count;
         if (total == 0) return new List<BusFactorDto>();
 
-        var filter     = new CommitFilter { SortBy = CommitSortStrategies.Time, IncludeReachableFrom = repo.Head };
+        var filter      = new CommitFilter { SortBy = CommitSortStrategies.Time, IncludeReachableFrom = repo.Head };
         var authorFiles = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var commit in repo.Commits.QueryBy(filter).Take(200))
         {
             if (!commit.Parents.Any()) continue;
@@ -179,9 +204,13 @@ public class GitAnalysisService : IGitAnalysisService
 
         return authorCommits.Select(a => new BusFactorDto
         {
-            AuthorName = a.Name, AuthorEmail = a.Email, CommitCount = a.Count,
-            Percentage  = Math.Round((double)a.Count / total * 100, 1),
-            PrimaryFiles = authorFiles.TryGetValue(a.Email, out var files) ? files.Take(10).ToList() : new List<string>()
+            AuthorName   = a.Name,
+            AuthorEmail  = a.Email,
+            CommitCount  = a.Count,
+            Percentage   = Math.Round((double)a.Count / total * 100, 1),
+            PrimaryFiles = authorFiles.TryGetValue(a.Email, out var files)
+                ? files.Take(10).ToList()
+                : new List<string>()
         }).ToList();
     }
 }

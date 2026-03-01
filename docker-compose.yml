@@ -1,30 +1,41 @@
 version: "3.9"
 
+# SEC-02 FIX: SA-lösenordet och JWT-nyckeln är borttagna ur denna fil.
+# Skapa en .env-fil (som INTE committas) baserad på .env.example:
+#
+#   cp .env.example .env
+#   # Fyll i starka lösenord i .env
+#
+# docker-compose läser automatiskt .env i samma katalog.
+
 services:
 
-  # ── SQL Server ────────────────────────────────────────────────────────
+  # ── SQL Server ──────────────────────────────────────────────────────────
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: synthtax-db
     restart: unless-stopped
     environment:
-      SA_PASSWORD:        "Synthtax_2024!"
-      ACCEPT_EULA:        "Y"
-      MSSQL_PID:          "Developer"
+      SA_PASSWORD:   "${MSSQL_SA_PASSWORD}"          # ← från .env
+      ACCEPT_EULA:   "Y"
+      MSSQL_PID:     "Developer"
     ports:
       - "1433:1433"
     volumes:
       - synthtax_db:/var/opt/mssql
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd",
-             "-S", "localhost", "-U", "sa", "-P", "Synthtax_2024!",
-             "-Q", "SELECT 1", "-No"]
+      # SEC-02 FIX: Lösenordet är borttaget ur healthcheck-kommandot.
+      # sqlcmd hämtar SA_PASSWORD från miljövariabeln automatiskt.
+      test: >
+        CMD /opt/mssql-tools18/bin/sqlcmd
+          -S localhost -U sa -P "$$SA_PASSWORD"
+          -Q "SELECT 1" -No
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
 
-  # ── ASP.NET Core API ─────────────────────────────────────────────────
+  # ── ASP.NET Core API ────────────────────────────────────────────────────
   api:
     image: synthtax-api:latest
     container_name: synthtax-api
@@ -42,15 +53,16 @@ services:
       ASPNETCORE_URLS:                     "http://+:8080"
       ConnectionStrings__DefaultConnection: >-
         Server=db,1433;Database=SynthtaxDb;
-        User Id=sa;Password=Synthtax_2024!;
+        User Id=sa;Password=${MSSQL_SA_PASSWORD};
         TrustServerCertificate=True;
-      JwtSettings__SecretKey:                 "BYTA-TILL-MINST-32-TECKEN-HEMLIG-NYCKEL!!"
+        Encrypt=True;
+      JwtSettings__SecretKey:              "${JWT_SECRET_KEY}"    # ← från .env
       JwtSettings__Issuer:                 "Synthtax.API"
       JwtSettings__Audience:               "Synthtax.WPF"
       JwtSettings__AccessTokenExpiryMinutes: "60"
       JwtSettings__RefreshTokenExpiryDays:   "30"
-      Seeding__AdminPassword:              "Admin@Synthtax1!"
-      Seeding__DemoPassword:               "Demo@Synthtax1!"
+      Seeding__AdminPassword:              "${ADMIN_PASSWORD}"    # ← från .env
+      Seeding__DemoPassword:               "${DEMO_PASSWORD}"     # ← från .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 15s

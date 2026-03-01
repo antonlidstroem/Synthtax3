@@ -11,10 +11,10 @@ public static class DbSeeder
 {
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
-        using var scope = serviceProvider.CreateScope();
-        var services = scope.ServiceProvider;
-        var logger   = services.GetRequiredService<ILogger<SynthtaxDbContext>>();
-        var config   = services.GetRequiredService<IConfiguration>();
+        using var scope   = serviceProvider.CreateScope();
+        var services      = scope.ServiceProvider;
+        var logger        = services.GetRequiredService<ILogger<SynthtaxDbContext>>();
+        var config        = services.GetRequiredService<IConfiguration>();
 
         try
         {
@@ -63,7 +63,6 @@ public static class DbSeeder
         }
 
         var password = config["Seeding:AdminPassword"] ?? "Admin@Synthtax1!";
-
         var user = new ApplicationUser
         {
             UserName       = userName,
@@ -80,9 +79,11 @@ public static class DbSeeder
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(user, "Admin");
-            logger.LogInformation(
-                "Admin user created. Username: {User} | Password: {Password}",
-                userName, password);
+
+            // SEC-01 FIX: Lösenordet loggades tidigare i klartext:
+            //   logger.LogInformation("... Password: {Password}", userName, password);
+            // Det är borttaget. Lösenordet sätts via Seeding:AdminPassword i miljövariabler.
+            logger.LogInformation("Admin user '{User}' created successfully.", userName);
         }
         else
         {
@@ -100,7 +101,6 @@ public static class DbSeeder
         if (await userManager.FindByNameAsync(userName) is not null) return;
 
         var password = config["Seeding:DemoPassword"] ?? "Demo@Synthtax1!";
-
         var user = new ApplicationUser
         {
             UserName       = userName,
@@ -117,9 +117,9 @@ public static class DbSeeder
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(user, "User");
-            logger.LogInformation(
-                "Demo user created. Username: {User} | Password: {Password}",
-                userName, password);
+
+            // SEC-01 FIX: Lösenord loggas inte.
+            logger.LogInformation("Demo user '{User}' created successfully.", userName);
         }
     }
 

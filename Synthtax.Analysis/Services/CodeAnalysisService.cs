@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using Synthtax.Analysis.Pipeline;
 using Synthtax.Analysis.Rules;
 using Synthtax.Analysis.Workspace;
 using Synthtax.Core.DTOs;
@@ -52,8 +51,7 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
         {
             var docs = _workspace.GetCSharpDocuments(project).ToList();
             await ProcessDocumentsAsync(docs, null, result, cancellationToken);
-            result.TotalIssues =
-                result.LongMethods.Count + result.DeadVariables.Count + result.UnnecessaryUsings.Count;
+            UpdateTotalIssues(result);
         }
         finally { workspace.Dispose(); }
         return result;
@@ -71,8 +69,6 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
         string solutionPath, CancellationToken cancellationToken = default)
         => await RunSingleRule(solutionPath, new UnnecessaryUsingRule(), cancellationToken);
 
-    // ── private helpers ────────────────────────────────────────────────────────
-
     private async Task<CodeAnalysisResultDto> RunRulesOnContext(
         AnalysisContext ctx, string solutionPath, CancellationToken ct)
     {
@@ -80,8 +76,7 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
         try
         {
             await ProcessDocumentsAsync(ctx.Documents, ctx, result, ct);
-            result.TotalIssues =
-                result.LongMethods.Count + result.DeadVariables.Count + result.UnnecessaryUsings.Count;
+            UpdateTotalIssues(result);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -102,6 +97,9 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
         var deadBag  = new ConcurrentBag<CodeIssueDto>();
         var usingBag = new ConcurrentBag<CodeIssueDto>();
 
+        // BUG-03 FIX: uppsamlingsbag för alla framtida regler (CA004+)
+        var otherBag = new ConcurrentBag<CodeIssueDto>();
+
         await Parallel.ForEachAsync(docs,
             new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount },
             async (doc, token) =>
@@ -109,16 +107,20 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
                 var root    = ctx?.GetRoot(doc)  ?? await doc.GetSyntaxRootAsync(token);
                 var model   = ctx?.GetModel(doc) ?? await doc.GetSemanticModelAsync(token);
                 if (root is null) return;
+
                 var filePath = ctx?.GetFilePath(doc) ?? doc.FilePath ?? doc.Name;
 
                 foreach (var rule in _rules)
                 foreach (var issue in rule.Analyze(root, model, filePath, token))
                 {
+                    // BUG-03 FIX: default-case fångar upp alla nya regler automatiskt.
+                    // Tidigare saknades default och issues från nya regler försvann tyst.
                     switch (issue.IssueType)
                     {
-                        case "LongMethod":        longBag.Add(issue);  break;
-                        case "DeadVariable":       deadBag.Add(issue);  break;
-                        case "UnnecessaryUsing":   usingBag.Add(issue); break;
+                        case "LongMethod":      longBag.Add(issue);  break;
+                        case "DeadVariable":    deadBag.Add(issue);  break;
+                        case "UnnecessaryUsing": usingBag.Add(issue); break;
+                        default:               otherBag.Add(issue);  break;
                     }
                 }
             });
@@ -126,6 +128,19 @@ public class CodeAnalysisService : ICodeAnalysisService, IContextAwareAnalysis
         result.LongMethods.AddRange(longBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
         result.DeadVariables.AddRange(deadBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
         result.UnnecessaryUsings.AddRange(usingBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
+        result.AllOtherIssues.AddRange(otherBag.OrderBy(i => i.FilePath).ThenBy(i => i.LineNumber));
+    }
+
+    /// <summary>
+    /// Räknar alla issues från samtliga listor, inklusive AllOtherIssues.
+    /// </summary>
+    private static void UpdateTotalIssues(CodeAnalysisResultDto result)
+    {
+        result.TotalIssues =
+            result.LongMethods.Count +
+            result.DeadVariables.Count +
+            result.UnnecessaryUsings.Count +
+            result.AllOtherIssues.Count;
     }
 
     private async Task<List<CodeIssueDto>> RunSingleRule(

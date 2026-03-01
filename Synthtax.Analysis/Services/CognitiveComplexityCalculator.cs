@@ -46,6 +46,7 @@ public static class CognitiveComplexityCalculator
                 Visit(node.Statement);
                 _nestingLevel--;
             }
+
             if (node.Else is not null)
             {
                 if (node.Else.Statement is not IfStatementSyntax)
@@ -130,20 +131,20 @@ public static class CognitiveComplexityCalculator
         }
 
         public override void VisitGotoStatement(GotoStatementSyntax node) => _complexity += 1;
+
         public override void VisitBreakStatement(BreakStatementSyntax node) { }
 
         public override void VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var name = node.Expression switch
             {
-                IdentifierNameSyntax id       => id.Identifier.Text,
+                IdentifierNameSyntax id        => id.Identifier.Text,
                 MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
                 _                              => null
             };
             if (name is not null &&
                 string.Equals(name, _methodName, StringComparison.Ordinal))
                 _complexity += 1;
-
             DefaultVisit(node);
         }
 
@@ -173,12 +174,17 @@ public static class CognitiveComplexityCalculator
             return result;
         }
 
+        // BUG-05 FIX: Den gamla implementationen anropade INTE DefaultVisit för
+        // logiska operatorer (&&, ||), vilket innebar att undernoder i komplexa
+        // uttryck som `a && (b || c)` inte traverserades korrekt av walkern.
+        //
+        // Rättning: DefaultVisit anropas alltid så att sub-expressions nås.
+        // Komplexitetsräkning sker däremot exklusivt i VisitBooleanSequences
+        // (som anropas från if/while/do), så vi dubbelräknar inte.
         public override void VisitBinaryExpression(BinaryExpressionSyntax node)
         {
-            var kind = node.Kind();
-            if (kind is not SyntaxKind.LogicalAndExpression
-                    and not SyntaxKind.LogicalOrExpression)
-                DefaultVisit(node);
+            // Traversera alltid undernoderna — räkning sker i VisitBooleanSequences.
+            DefaultVisit(node);
         }
 
         public override void VisitTryStatement(TryStatementSyntax node)
