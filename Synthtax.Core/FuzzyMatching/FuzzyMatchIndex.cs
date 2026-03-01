@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Synthtax.Core.Tokenization;
-using Synthtax.Domain.Entities;
+
 
 namespace Synthtax.Core.FuzzyMatching;
 
@@ -113,7 +113,7 @@ public sealed class FuzzyMatchIndex
     /// Hämtar kandidater för ett scan-issue, sorterade efter prioritet:
     /// 1. Samma fil → 2. Alla med samma regel.
     /// </summary>
-    public IReadOnlyList<IndexedBacklogItem> GetCandidates(
+    internal IReadOnlyList<IndexedBacklogItem> GetCandidates(
         string ruleId,
         string filePath,
         bool   preferSameFile,

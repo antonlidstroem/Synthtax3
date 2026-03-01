@@ -1,14 +1,17 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Build.Locator;
 using Synthtax.API.Extensions;
 using Synthtax.API.Middleware;
+using Synthtax.Application.Extensions;
+using Synthtax.Core.Extensions;
 using Synthtax.Infrastructure;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Extensions;
-using System.Threading.RateLimiting;
+
 
 if (!MSBuildLocator.IsRegistered)
     MSBuildLocator.RegisterDefaults();
@@ -36,7 +39,14 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 builder.Services.AddApiServices(builder.Configuration);
 builder.Services.AddAnalysisServices();
 
-builder.Services.AddDomainInfrastructure(builder.Configuration);
+
+
+builder.Services.AddPluginCore();
+builder.Services.AddOrchestrator();
+builder.Services.AddFuzzyMatching();
+
+builder.Services.AddSaasInfrastructure(builder.Configuration);
+builder.Services.AddSaasAuthentication(builder.Configuration);
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -115,6 +125,7 @@ app.UseCors("SynthtaxPolicy");
 app.UseRateLimiter();
 app.UseAuditLogging();
 app.UseAuthentication();
+app.UseSaasTenantContext();
 app.UseAuthorization();
 app.MapControllers();
 

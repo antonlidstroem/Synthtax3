@@ -20,8 +20,8 @@
     <!-- Git -->
     <PackageReference Include="LibGit2Sharp"                                 Version="0.30.0" />
 
-	  <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
-	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+	  <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>

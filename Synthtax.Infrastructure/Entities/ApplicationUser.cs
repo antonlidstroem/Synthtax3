@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Synthtax.Domain.Entities;
 
 namespace Synthtax.Infrastructure.Entities;
 
@@ -12,6 +13,8 @@ public class ApplicationUser : IdentityUser
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
     public Guid TenantId { get; set; } = Guid.Empty;
+
+    public ICollection<OrganizationMembership> Memberships { get; set; } = [];
 
     /// <summary>
     /// Kommaseparerad lista med modulnamn som användaren har åtkomst till.

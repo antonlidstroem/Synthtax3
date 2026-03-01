@@ -66,4 +66,5 @@ public class PipelineRequestDto
     /// Använder den kanoniska FullAnalysisOptions från ISolutionAnalysisPipeLine.cs.
     /// </summary>
     public Synthtax.Core.Interfaces.FullAnalysisOptions? Options { get; set; }
+
 }

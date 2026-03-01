@@ -1,4 +1,3 @@
-using Microsoft.Build.Framework;
 using Microsoft.Extensions.Logging;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Normalization;
@@ -161,6 +160,16 @@ public abstract class AnalysisPluginBase : IAnalysisPlugin
             .ToList()
             .AsReadOnly();
     }
+
+    public bool Supports(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return false;
+
+        return SupportedExtensions.Any(e =>
+            string.Equals(e, extension, StringComparison.OrdinalIgnoreCase));
+    }
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
