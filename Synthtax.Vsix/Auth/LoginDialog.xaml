@@ -1,0 +1,122 @@
+<Window x:Class="Synthtax.Vsix.Auth.LoginDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+        Title="Synthtax — Logga in"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <!-- VS-tema: ärvs automatiskt via DialogWindow base class -->
+    <Window.Resources>
+        <Style x:Key="SynthtaxLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static vsui:EnvironmentColors.SystemWindowTextBrushKey}}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="SynthtaxInput" TargetType="Control">
+            <Setter Property="Background"   Value="{DynamicResource {x:Static vsui:EnvironmentColors.ComboBoxBackgroundBrushKey}}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource {x:Static vsui:EnvironmentColors.ComboBoxItemTextBrushKey}}"/>
+            <Setter Property="BorderBrush"  Value="{DynamicResource {x:Static vsui:EnvironmentColors.ComboBoxBorderBrushKey}}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Height" Value="28"/>
+        </Style>
+
+        <Style x:Key="SynthtaxButton" TargetType="Button">
+            <Setter Property="Background"  Value="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowButtonHoverActiveGlyphBrushKey}}"/>
+            <Setter Property="Foreground"  Value="{DynamicResource {x:Static vsui:EnvironmentColors.SystemWindowTextBrushKey}}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowButtonActiveBorderBrushKey}}"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- Header -->
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>  <!-- URL -->
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>  <!-- Username -->
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>  <!-- Password -->
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>  <!-- Error -->
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>  <!-- Buttons -->
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <!-- Synthtax logotyp (SVG-ikon som Rectangle) -->
+            <Rectangle Width="24" Height="24" Margin="0,0,10,0"
+                       Fill="{DynamicResource {x:Static vsui:EnvironmentColors.FileTabSelectedTextBrushKey}}"
+                       RadiusX="4" RadiusY="4"/>
+            <TextBlock Text="Synthtax Code Quality"
+                       FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.SystemWindowTextBrushKey}}"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- API Base URL -->
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="API URL" Style="{StaticResource SynthtaxLabel}"/>
+            <TextBox x:Name="ApiUrlBox"
+                     Style="{StaticResource SynthtaxInput}"
+                     Text="https://api.synthtax.io"
+                     ToolTip="URL till Synthtax API-servern"/>
+        </StackPanel>
+
+        <!-- Användarnamn -->
+        <StackPanel Grid.Row="4">
+            <TextBlock Text="Användarnamn" Style="{StaticResource SynthtaxLabel}"/>
+            <TextBox x:Name="UserNameBox"
+                     Style="{StaticResource SynthtaxInput}"
+                     KeyDown="OnKeyDown"/>
+        </StackPanel>
+
+        <!-- Lösenord -->
+        <StackPanel Grid.Row="6">
+            <TextBlock Text="Lösenord" Style="{StaticResource SynthtaxLabel}"/>
+            <PasswordBox x:Name="PasswordBox"
+                         Style="{StaticResource SynthtaxInput}"
+                         KeyDown="OnKeyDown"/>
+        </StackPanel>
+
+        <!-- Felmeddelande -->
+        <TextBlock x:Name="ErrorText"
+                   Grid.Row="8"
+                   Visibility="Collapsed"
+                   Foreground="#E74C3C"
+                   TextWrapping="Wrap"
+                   MaxWidth="370"
+                   FontSize="12"/>
+
+        <!-- Loading-indikator (visas under inloggning) -->
+        <ProgressBar x:Name="LoadingBar"
+                     Grid.Row="8"
+                     IsIndeterminate="True"
+                     Height="3"
+                     Visibility="Collapsed"
+                     Margin="0,4,0,0"/>
+
+        <!-- Knappar -->
+        <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton"
+                    Content="Avbryt"
+                    Style="{StaticResource SynthtaxButton}"
+                    Click="OnCancelClick"
+                    Margin="0,0,8,0"
+                    IsCancel="True"/>
+            <Button x:Name="LoginButton"
+                    Content="Logga in"
+                    Style="{StaticResource SynthtaxButton}"
+                    Click="OnLoginClick"
+                    IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

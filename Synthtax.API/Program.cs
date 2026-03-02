@@ -39,7 +39,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 builder.Services.AddApiServices(builder.Configuration);
 builder.Services.AddAnalysisServices();
 
-
+builder.Services.AddCors(opts =>
+    opts.AddDefaultPolicy(p =>
+        p.WithOrigins("https://api.synthtax.io", "null")
+         .AllowAnyMethod()
+         .AllowAnyHeader()
+         .AllowCredentials()));
 
 builder.Services.AddPluginCore();
 builder.Services.AddOrchestrator();
@@ -47,6 +52,7 @@ builder.Services.AddFuzzyMatching();
 
 builder.Services.AddSaasInfrastructure(builder.Configuration);
 builder.Services.AddSaasAuthentication(builder.Configuration);
+builder.Services.AddSynthtaxSignalR(builder.Configuration);
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -127,6 +133,7 @@ app.UseAuditLogging();
 app.UseAuthentication();
 app.UseSaasTenantContext();
 app.UseAuthorization();
+app.MapSynthtaxHubs();
 app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new

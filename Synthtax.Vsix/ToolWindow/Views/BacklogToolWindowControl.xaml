@@ -1,0 +1,308 @@
+<UserControl x:Class="Synthtax.Vsix.ToolWindow.Views.BacklogToolWindowControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:conv="clr-namespace:Synthtax.Vsix.ToolWindow.Converters"
+             xmlns:vm="clr-namespace:Synthtax.Vsix.ToolWindow.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:BacklogToolWindowViewModel}"
+             Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+
+    <UserControl.Resources>
+        <!-- Konvertrar -->
+        <conv:SeverityToColorConverter x:Key="SevColor"/>
+        <conv:StatusToIconConverter    x:Key="StatusIcon"/>
+        <BooleanToVisibilityConverter  x:Key="BoolVis"/>
+
+        <!-- Invers BoolToVis -->
+        <conv:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
+
+        <!-- Gemensam textfärg -->
+        <SolidColorBrush x:Key="ForegroundBrush"
+             Color="{DynamicResource {x:Static vsui:EnvironmentColors.SystemWindowTextColorKey}}"/>
+
+        <!-- Stil för kolumnrubriker -->
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background"
+                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.GridHeadingBackgroundBrushKey}}"/>
+            <Setter Property="Foreground"
+                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.GridHeadingTextBrushKey}}"/>
+            <Setter Property="Padding"   Value="6,4"/>
+            <Setter Property="FontSize"  Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.GridLineBrushKey}}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+
+        <!-- DataGrid-rad-stil -->
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background"
+                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background"
+                            Value="{DynamicResource {x:Static vsui:EnvironmentColors.SystemHighlightBrushKey}}"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background"
+                            Value="{DynamicResource {x:Static vsui:EnvironmentColors.CommandBarMouseOverBackgroundBeginBrushKey}}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TOOLBAR                                                         -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <ToolBar DockPanel.Dock="Top"
+                 Background="{DynamicResource {x:Static vsui:EnvironmentColors.CommandBarBackgroundBrushKey}}">
+
+            <Button Content="↻ Refresh"
+                    Command="{Binding RefreshCommand}"
+                    ToolTip="Hämta senaste issues från Synthtax API (F5)"
+                    Padding="8,4"/>
+
+            <Separator/>
+
+            <Button Content="🔑 Logga in"
+                    Command="{Binding LoginCommand}"
+                    Visibility="{Binding IsLoggedIn, Converter={StaticResource InvBoolVis}}"
+                    Padding="8,4"/>
+
+            <Separator/>
+
+            <!-- Severity-filter -->
+            <TextBlock Text="Severity:" VerticalAlignment="Center" Margin="4,0"/>
+            <ComboBox SelectedValue="{Binding FilterSeverity}" Width="90"
+                      VerticalAlignment="Center">
+                <ComboBoxItem Content="All"      IsSelected="True"/>
+                <ComboBoxItem Content="Critical"/>
+                <ComboBoxItem Content="High"/>
+                <ComboBoxItem Content="Medium"/>
+                <ComboBoxItem Content="Low"/>
+            </ComboBox>
+
+            <Separator/>
+
+            <!-- Textsökning -->
+            <TextBox x:Name="SearchBox"
+                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                     Width="160"
+                     VerticalAlignment="Center"
+                     ToolTip="Sök på regel-ID, meddelande, fil eller klass"
+                     Margin="4,0"/>
+
+            <Button Content="✕"
+                    Command="{Binding ClearSearchCommand}"
+                    ToolTip="Rensa sökning"
+                    Padding="4,2"
+                    FontSize="10"
+                    Visibility="{Binding HasFilterText, Converter={StaticResource BoolVis}}"/>
+        </ToolBar>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- HÄLSOPANEL                                                      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top"
+                Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowContentGridBrushKey}}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource {x:Static vsui:EnvironmentColors.GridLineBrushKey}}"
+                Padding="10,8"
+                Visibility="{Binding IsLoggedIn, Converter={StaticResource BoolVis}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding ProjectName}" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{StaticResource ForegroundBrush}"/>
+
+                    <!-- Hälsopoäng-bar -->
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <ProgressBar Value="{Binding HealthScore}" Maximum="100"
+                                     Width="120" Height="8" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding HealthScoreText}"
+                                   Margin="6,0,0,0" FontSize="11"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                    </StackPanel>
+
+                    <!-- Issue-räknare -->
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock FontSize="11" Foreground="#E74C3C">
+                            <Run Text="🔴 "/><Run Text="{Binding CriticalCount}"/>
+                        </TextBlock>
+                        <TextBlock Text=" · " FontSize="11" Foreground="{StaticResource ForegroundBrush}"/>
+                        <TextBlock FontSize="11" Foreground="#E67E22">
+                            <Run Text="🟠 "/><Run Text="{Binding HighCount}"/>
+                        </TextBlock>
+                        <TextBlock Text=" · " FontSize="11" Foreground="{StaticResource ForegroundBrush}"/>
+                        <TextBlock FontSize="11" Foreground="{StaticResource ForegroundBrush}">
+                            <Run Text="Total: "/><Run Text="{Binding TotalIssues}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Plan-badge -->
+                <Border Grid.Column="1" Background="#2ECC71" CornerRadius="3"
+                        Padding="8,2" VerticalAlignment="Top">
+                    <TextBlock Text="{Binding SubscriptionPlan}"
+                               Foreground="White" FontSize="10" FontWeight="Bold"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EJ INLOGGAD                                                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Grid DockPanel.Dock="Top"
+              Visibility="{Binding IsLoggedIn, Converter={StaticResource InvBoolVis}}"
+              Margin="20">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="🔑" FontSize="32" HorizontalAlignment="Center"/>
+                <TextBlock Text="Logga in på Synthtax" FontSize="14" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,8,0,4"
+                           Foreground="{StaticResource ForegroundBrush}"/>
+                <TextBlock Text="Klicka 'Logga in' i toolbaren för att se dina issues."
+                           HorizontalAlignment="Center" FontSize="12"
+                           Foreground="{StaticResource ForegroundBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LADDNINGSINDIKATOR                                              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <ProgressBar DockPanel.Dock="Top"
+                     IsIndeterminate="True" Height="3"
+                     Visibility="{Binding IsLoading, Converter={StaticResource BoolVis}}"/>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- FELMEDDELANDE                                                   -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="#FDEDEC" Padding="10,6"
+                Visibility="{Binding HasError, Converter={StaticResource BoolVis}}">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#C0392B"
+                       FontSize="12" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- SIDFOTSRAD                                                      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource {x:Static vsui:EnvironmentColors.StatusBarDefaultBrushKey}}"
+                Padding="8,4">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="◀"
+                            Command="{Binding PrevPageCommand}"
+                            IsEnabled="{Binding HasPrevPage}"
+                            Padding="6,2" Margin="0,0,4,0"/>
+                    <Button Content="▶"
+                            Command="{Binding NextPageCommand}"
+                            IsEnabled="{Binding HasNextPage}"
+                            Padding="6,2"/>
+                </StackPanel>
+                <TextBlock Text="{Binding PageText}" VerticalAlignment="Center"
+                           FontSize="11"
+                           Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.StatusBarDefaultTextBrushKey}}"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- DATAGRIDEN — issues                                             -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <DataGrid ItemsSource="{Binding FilteredItems}"
+                  SelectedItem="{Binding SelectedItem}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  CanUserSortColumns="True"
+                  CanUserResizeColumns="True"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  BorderThickness="0"
+                  Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+
+            <DataGrid.InputBindings>
+                <MouseBinding MouseAction="LeftDoubleClick"
+                              Command="{Binding OpenInEditorCommand}"
+                              CommandParameter="{Binding SelectedItem}"/>
+            </DataGrid.InputBindings>
+
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="⚡ Fix with Copilot"
+                              Command="{Binding DataContext.FixWithCopilotCommand,
+                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <MenuItem Header="📋 Export for Claude"
+                              Command="{Binding DataContext.ExportForClaudeCommand,
+                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <Separator/>
+                    <MenuItem Header="📂 Öppna i editor"
+                              Command="{Binding DataContext.OpenInEditorCommand,
+                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+
+            <DataGrid.Columns>
+
+                <!-- Severity-prick -->
+                <DataGridTemplateColumn Header="" Width="8" CanUserResize="False" CanUserSort="True" SortMemberPath="SeverityLevel">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Rectangle Width="6" Height="6" RadiusX="3" RadiusY="3"
+                                       Fill="{Binding Severity, Converter={StaticResource SevColor}}"
+                                       VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- RuleId -->
+                <DataGridTextColumn Header="Regel"
+                                    Binding="{Binding RuleId}"
+                                    Width="65" FontFamily="Consolas" FontSize="11"/>
+
+                <!-- Meddelande -->
+                <DataGridTextColumn Header="Beskrivning"
+                                    Binding="{Binding Message}"
+                                    Width="*" FontSize="12"/>
+
+                <!-- Scope -->
+                <DataGridTextColumn Header="Scope"
+                                    Binding="{Binding Scope}"
+                                    Width="180" FontSize="11" FontFamily="Consolas"/>
+
+                <!-- Fil + rad -->
+                <DataGridTemplateColumn Header="Fil" Width="140">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding FileName}" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock FontSize="10" Foreground="Gray">
+                                    <Run Text="rad "/><Run Text="{Binding StartLine}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Status-ikon -->
+                <DataGridTextColumn Header="Status"
+                                    Binding="{Binding Status, Converter={StaticResource StatusIcon}}"
+                                    Width="60" FontSize="14"/>
+
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

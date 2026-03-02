@@ -1,0 +1,59 @@
+<!--
+  Fas 8 — csproj-patch för Synthtax.Vsix.csproj
+  
+  Lägg till dessa ItemGroup-block i Synthtax.Vsix.csproj:
+-->
+
+<!-- ── NuGet-paket ───────────────────────────────────────────────────── -->
+<!--
+  Lägg till i befintlig <ItemGroup> med PackageReferences:
+-->
+<!--
+<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+<PackageReference Include="Microsoft.AspNetCore.Http.Connections.Client" Version="8.0.0" />
+<PackageReference Include="Microsoft.Extensions.Logging.Abstractions"    Version="8.0.0" />
+-->
+
+<!-- ── Nya källfiler ────────────────────────────────────────────────── -->
+<!--
+  Lägg till i befintlig <ItemGroup> med Compile-includes:
+-->
+<!--
+<Compile Include="Services\ConnectionStateModels.cs" />
+<Compile Include="Services\SynthtaxRealtimeService.cs" />
+<Compile Include="Services\StatusBarRealtimeService.cs" />
+<Compile Include="Services\BacklogViewModelRealtimeExtensions.cs" />
+<Compile Include="Services\SynthtaxPackageFas8Additions.cs" />
+<Compile Include="Diagnostics\RealtimeDiagnosticBridge.cs" />
+-->
+
+<!--
+  ── NuGet-paket för server-projektet (Synthtax.API.csproj) ────────────
+  
+  Lägg till i Synthtax.API.csproj:
+-->
+<!--
+<PackageReference Include="Microsoft.AspNetCore.SignalR" Version="8.0.0" />
+
+  OBS: ASP.NET Core 8+ har SignalR inbyggt — kräver oftast inga extra NuGet-paket
+  i server-projektet om det redan targear net8.0 eller senare.
+  Kontrollera: dotnet list package | grep SignalR
+-->
+
+<!--
+  ── Komplett beroendekarta ─────────────────────────────────────────────
+  
+  Client (VSIX, net472):
+    Microsoft.AspNetCore.SignalR.Client 8.0.0
+      → Microsoft.AspNetCore.Http.Connections.Client
+      → Microsoft.Extensions.Logging.Abstractions
+      → System.Net.WebSockets.Client (inbyggd i net472)
+  
+  Server (Synthtax.API, net8.0):
+    Microsoft.AspNetCore.SignalR (inbyggd via Microsoft.AspNetCore.App-metapaketet)
+    
+  Kontrakt (delat mellan client och server):
+    Synthtax.Realtime.Contracts (nytt class library-projekt eller inline i API)
+    Innehåll: AnalysisHubContracts.cs
+    Refereras av: Synthtax.API + Synthtax.Vsix
+-->

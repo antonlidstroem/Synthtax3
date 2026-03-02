@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Application.Orchestration;
 using Synthtax.Core.Orchestration;
+using Synthtax.Domain.Entities;
 
 namespace Synthtax.Application.Extensions;
 
@@ -35,5 +36,27 @@ public static class OrchestratorServiceExtensions
         services.AddScoped<IAnalysisOrchestrator, AnalysisOrchestrator>();
 
         return services;
+    }
+
+    public async Task SyncAsync(AnalysisSession session, ...)
+    {
+        var (added, removed) = await _writer.CommitDiffAsync(...);
+
+        // ── Fas 8: Pusha realtidsuppdatering ─────────────────────────────────
+        await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedPayload
+        {
+            OrganizationId = _currentUser.OrganizationId ?? Guid.Empty,
+            ProjectId = session.ProjectId,
+            ProjectName = project.Name,
+            SessionId = session.Id,
+            CompletedAt = DateTime.UtcNow,
+            NewIssuesCount = added.Count,
+            ResolvedIssuesCount = removed.Count,
+            TotalOpenIssues = await CountOpenIssuesAsync(session.ProjectId),
+            HealthScore = CalculateHealthScore(session),
+            IsCiCdTriggered = session.IsCiCdTriggered,
+            NewIssues = added.Take(50).Select(MapToSummary).ToList(),
+            ResolvedFingerprints = removed.Select(i => i.Fingerprint).ToList()
+        });
     }
 }

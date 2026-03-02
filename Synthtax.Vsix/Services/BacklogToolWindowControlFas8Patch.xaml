@@ -1,0 +1,96 @@
+<!--
+  Fas 8 — XAML-patch för BacklogToolWindowControl.xaml
+  Lägg till följande XAML-snippet i ToolBar-elementet (i slutet, före </ToolBar>):
+  
+  Syftet: visa en diskret live-indikator i toolbaren med anslutningsstatus.
+-->
+
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  INFOGA I: ToolWindow/Views/BacklogToolWindowControl.xaml ║
+  ║  PLACERING: Sist i <ToolBar>-blocket                      ║
+  ╚══════════════════════════════════════════════════════════╝
+-->
+
+<!-- Fas 8: Realtids-indikator ──────────────────────────────────────── -->
+<!--
+<Separator/>
+
+<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+    
+    <!-- Live-prick: färg styrs av RealtimeDotColor-property -->
+    <Ellipse Width="8" Height="8"
+             VerticalAlignment="Center"
+             Margin="0,0,5,0">
+        <Ellipse.Fill>
+            <SolidColorBrush Color="{Binding RealtimeDotColor}"/>
+        </Ellipse.Fill>
+        <!-- Pulsering-animation när Live -->
+        <Ellipse.Style>
+            <Style TargetType="Ellipse">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsRealtimeLive}" Value="True">
+                        <DataTrigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation
+                                        Storyboard.TargetProperty="Opacity"
+                                        From="1.0" To="0.3" Duration="0:0:1"
+                                        AutoReverse="True"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.EnterActions>
+                        <DataTrigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation
+                                        Storyboard.TargetProperty="Opacity"
+                                        To="1.0" Duration="0:0:0.2"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.ExitActions>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Ellipse.Style>
+    </Ellipse>
+    
+    <!-- Status-text: "Live" / "Ansluter…" / "Offline" -->
+    <TextBlock Text="{Binding RealtimeStatus}"
+               FontSize="11"
+               VerticalAlignment="Center"
+               Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.SystemWindowTextBrushKey}}"
+               ToolTip="{Binding RealtimeStatus}"/>
+</StackPanel>
+-->
+
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  INFOGA I: ToolWindow/Views/BacklogToolWindowControl.xaml ║
+  ║  PLACERING: Under HÄLSOPANELEN (i Grid Grid.Column="1")   ║
+  ╚══════════════════════════════════════════════════════════╝
+  
+  Ersätt den befintliga Plan-badge-Border med denna (bevarar plan-badge + lägger till realtidsstatus):
+-->
+<!--
+<StackPanel Grid.Column="1" HorizontalAlignment="Right">
+    
+    <!-- Plan-badge (befintlig) -->
+    <Border Background="#2ECC71" CornerRadius="3"
+            Padding="8,2" VerticalAlignment="Top" Margin="0,0,0,4">
+        <TextBlock Text="{Binding SubscriptionPlan}"
+                   Foreground="White" FontSize="10" FontWeight="Bold"/>
+    </Border>
+    
+    <!-- Fas 8: Realtids-badge -->
+    <Border CornerRadius="3" Padding="6,2" VerticalAlignment="Top">
+        <Border.Background>
+            <SolidColorBrush Color="{Binding RealtimeDotColor}"/>
+        </Border.Background>
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding RealtimeStatus}"
+                       Foreground="White" FontSize="10" FontWeight="Bold"/>
+        </StackPanel>
+    </Border>
+</StackPanel>
+-->

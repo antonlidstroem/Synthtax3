@@ -1,0 +1,39 @@
+<!--
+  Synthtax.Vsix.Fas8.props
+  ════════════════════════
+  Importeras i Synthtax.Vsix.csproj (från Fas 7) för att lägga till
+  Fas 8-beroenden och källfiler utan att modifiera Fas 7-filen.
+
+  Lägg till i Synthtax.Vsix.csproj (sist i <Project>):
+    <Import Project="Synthtax.Vsix.Fas8.props" />
+-->
+<Project>
+
+  <!-- ── NuGet-paket för Fas 8 ──────────────────────────────────────────── -->
+  <ItemGroup>
+    <!-- SignalR .NET-klient (kompatibel med net472 via netstandard2.0) -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"         Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core"    Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Connections.Client" Version="8.0.0" />
+
+    <!-- Logging-abstraktion (krävs av SynthtaxHubClient) -->
+    <PackageReference Include="Microsoft.Extensions.Logging"                Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug"         Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- ── Fas 8 källfiler ────────────────────────────────────────────────── -->
+  <ItemGroup>
+    <!-- Delade payloads (kopieras från Synthtax.Shared) -->
+    <Compile Include="SignalR\SignalRPayloads.cs" />
+
+    <!-- VSIX SignalR-klient -->
+    <Compile Include="SignalR\SynthtaxHubClient.cs" />
+    <Compile Include="SignalR\ToolWindowViewModelExtension.cs" />
+    <Compile Include="SignalR\SynthtaxPackageFas8Extension.cs" />
+
+    <!-- Fas 8 Services -->
+    <Compile Include="Services\RealTimeUpdateService.cs" />
+    <Compile Include="Services\StatusBarService.cs" />
+  </ItemGroup>
+
+</Project>

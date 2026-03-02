@@ -55,6 +55,12 @@
 		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
 		<ProjectReference Include="..\Synthtax.Infrastructure\Synthtax.Infrastructure.csproj" />
 	</ItemGroup>
+
+
+
+	<ItemGroup>
+	  <Folder Include="Hubs\" />
+	</ItemGroup>
 	
 
 </Project>

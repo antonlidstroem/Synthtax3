@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0"
+                 xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"
+                 xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="Synthtax.Vsix.01234567-89ab-cdef-0123-456789abcdef"
+              Version="1.0.0"
+              Language="en-US"
+              Publisher="Synthtax AB" />
+    <DisplayName>Synthtax Code Quality</DisplayName>
+    <Description xml:space="preserve">
+      Real-time code quality analysis powered by Synthtax. Shows issues directly
+      in the editor with squiggles, Error List integration, and AI-assisted fixes
+      via GitHub Copilot and Claude.
+    </Description>
+    <Tags>code-quality,roslyn,AI,copilot,claude,static-analysis</Tags>
+    <ProjectType>CSPROJ</ProjectType>
+    <Icon>Resources\synthtax-icon.png</Icon>
+    <PreviewImage>Resources\synthtax-preview.png</PreviewImage>
+    <License>LICENSE.txt</License>
+    <MoreInfo>https://synthtax.io</MoreInfo>
+    <ReleaseNotes>https://synthtax.io/release-notes</ReleaseNotes>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 18.0)"/>
+    <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0, 18.0)"/>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0, 18.0)"/>
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP"
+                DisplayName=".NET Framework 4.7.2"
+                Version="[4.7.2,)" />
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage"
+           d:Source="Project"
+           d:ProjectName="%CurrentProject%"
+           Path="|Synthtax.Vsix;PkgdefProjectOutputGroup|" />
+    <Asset Type="Microsoft.VisualStudio.MefComponent"
+           d:Source="Project"
+           d:ProjectName="%CurrentProject%"
+           Path="|Synthtax.Vsix|" />
+    <Asset Type="Microsoft.VisualStudio.ToolboxControl"
+           d:Source="File"
+           d:SourcePath="" />
+  </Assets>
+</PackageManifest>
