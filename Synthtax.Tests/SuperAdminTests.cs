@@ -2,6 +2,7 @@
 // Requires: xunit, FluentAssertions
 
 using FluentAssertions;
+using NSubstitute;
 
 namespace Synthtax.Tests;
 

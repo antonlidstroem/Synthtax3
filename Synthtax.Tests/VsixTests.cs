@@ -7,6 +7,7 @@ using FluentAssertions;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using NSubstitute;
 
 // Simulerade typer för testbarhet utan VS SDK beroende
 namespace Synthtax.Tests;

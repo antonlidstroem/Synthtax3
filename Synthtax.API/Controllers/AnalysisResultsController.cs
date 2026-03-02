@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting; // Nytt
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
@@ -7,8 +8,9 @@ using Synthtax.Core.Interfaces;
 namespace Synthtax.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
+[Route("api/v1/[controller]")] // Versionering tillagd för konsekvens
+[Authorize(Policy = "UserOrAdmin")] // Använder policyn vi skapade i Program.cs
+[EnableRateLimiting("analysis")] // Aktiverar rate limiting för alla endpoints
 [Produces("application/json")]
 public class AnalysisResultsController : SynthtaxControllerBase
 {
@@ -19,7 +21,7 @@ public class AnalysisResultsController : SynthtaxControllerBase
         IAnalysisCacheService cache,
         ILogger<AnalysisResultsController> logger)
     {
-        _cache  = cache;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -29,40 +31,41 @@ public class AnalysisResultsController : SynthtaxControllerBase
     [ProducesResponseType(typeof(List<AnalysisSessionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSessions(
         [FromQuery] string? solutionPath = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        var sessions = await _cache.ListSessionsAsync(solutionPath, cancellationToken);
+        // Tips: Här kan du i framtiden filtrera på User.GetOrganizationId() 
+        // om cachade sessioner ska vara isolerade per org.
+        var sessions = await _cache.ListSessionsAsync(solutionPath, ct);
         return Ok(sessions);
     }
 
     [HttpGet("sessions/{sessionId:guid}")]
     [ProducesResponseType(typeof(AnalysisSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetSession(
-        Guid sessionId,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetSession(Guid sessionId, CancellationToken ct)
     {
-        var session = await _cache.GetSessionAsync(sessionId, cancellationToken);
-        return session is null ? NotFound() : Ok(session);
+        var session = await _cache.GetSessionAsync(sessionId, ct);
+        return session is null ? SessionNotFound(sessionId) : Ok(session);
     }
 
     [HttpDelete("sessions/{sessionId:guid}")]
+    [Authorize(Policy = "OrgAdminOrSystemAdmin")] // Bara admins får radera sessioner
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> DeleteSession(
-        Guid sessionId,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> DeleteSession(Guid sessionId, CancellationToken ct)
     {
-        await _cache.DeleteSessionAsync(sessionId, cancellationToken);
+        _logger.LogWarning("User {User} is deleting session {SessionId}", User.Identity?.Name, sessionId);
+        await _cache.DeleteSessionAsync(sessionId, ct);
         return NoContent();
     }
 
     [HttpPost("sessions/cleanup")]
+    [Authorize(Policy = "OrgAdminOrSystemAdmin")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Cleanup(CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Cleanup(CancellationToken ct)
     {
-        var count = await _cache.CleanupExpiredSessionsAsync(cancellationToken);
+        var count = await _cache.CleanupExpiredSessionsAsync(ct);
         _logger.LogInformation("Manual cleanup removed {Count} expired sessions", count);
-        return Ok(new { RemovedSessions = count });
+        return Ok(new { RemovedSessions = count, Timestamp = DateTime.UtcNow });
     }
 
     // ── Issues ────────────────────────────────────────────────────────────────
@@ -76,40 +79,29 @@ public class AnalysisResultsController : SynthtaxControllerBase
         [FromQuery] int pageSize = 50,
         [FromQuery] string? issueType = null,
         [FromQuery] Severity? severity = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        if (page < 1) page = 1;
-        if (pageSize is < 1 or > 200) pageSize = 50;
+        ValidatePagination(ref page, ref pageSize);
 
-        var session = await _cache.GetSessionAsync(sessionId, cancellationToken);
-        if (session is null)
-            return NotFound(new { Message = $"Session {sessionId} not found or expired." });
+        var session = await _cache.GetSessionAsync(sessionId, ct);
+        if (session is null) return SessionNotFound(sessionId);
 
-        var result = await _cache.GetIssuesAsync(
-            sessionId, page, pageSize, issueType, severity, cancellationToken);
+        var result = await _cache.GetIssuesAsync(sessionId, page, pageSize, issueType, severity, ct);
         return Ok(result);
     }
 
-    /// <summary>
-    /// Hämtar en enskild sparad issue inklusive fullständig kodsekvens (CodeSnippet, FixedCodeSnippet).
-    /// </summary>
     [HttpGet("issues/{issueId:guid}")]
     [ProducesResponseType(typeof(SavedIssueDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetIssueById(
-        Guid issueId,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetIssueById(Guid issueId, CancellationToken ct)
     {
-        var issue = await _cache.GetIssueByIdAsync(issueId, cancellationToken);
+        var issue = await _cache.GetIssueByIdAsync(issueId, ct);
         if (issue is null)
-            return NotFound(new { Message = $"Issue {issueId} not found or session expired." });
+            return NotFound(new ProblemDetails { Title = "Issue Not Found", Detail = $"Issue {issueId} not found or expired." });
+
         return Ok(issue);
     }
 
-    /// <summary>
-    /// Söker bland alla sparade issues oavsett session.
-    /// Stöder fritext i beskrivning/kodsekvens, filter på issueType och severity.
-    /// </summary>
     [HttpGet("issues/search")]
     [ProducesResponseType(typeof(IssueSearchResultDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchIssues(
@@ -119,34 +111,46 @@ public class AnalysisResultsController : SynthtaxControllerBase
         [FromQuery] bool? autoFixableOnly = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        if (page < 1) page = 1;
-        if (pageSize is < 1 or > 200) pageSize = 50;
+        ValidatePagination(ref page, ref pageSize);
 
-        var result = await _cache.SearchIssuesAsync(
-            q, issueType, severity, autoFixableOnly, page, pageSize, cancellationToken);
+        var result = await _cache.SearchIssuesAsync(q, issueType, severity, autoFixableOnly, page, pageSize, ct);
         return Ok(result);
     }
 
     // ── Summary ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returnerar aggregerad statistik för en session beräknad med SQL GROUP BY.
-    /// Tidigare laddades upp till 10 000 issues i minnet för LINQ-beräkning.
-    /// </summary>
     [HttpGet("sessions/{sessionId:guid}/summary")]
     [ProducesResponseType(typeof(IssueSummaryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetSessionSummary(
-        Guid sessionId,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetSessionSummary(Guid sessionId, CancellationToken ct)
     {
-        var session = await _cache.GetSessionAsync(sessionId, cancellationToken);
-        if (session is null)
-            return NotFound(new { Message = $"Session {sessionId} not found or expired." });
+        var session = await _cache.GetSessionAsync(sessionId, ct);
+        if (session is null) return SessionNotFound(sessionId);
 
-        var summary = await _cache.GetSessionSummaryAsync(sessionId, cancellationToken);
+        var summary = await _cache.GetSessionSummaryAsync(sessionId, ct);
         return Ok(summary);
     }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private void ValidatePagination(ref int page, ref int pageSize)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize switch
+        {
+            < 1 => 50,
+            > 200 => 200,
+            _ => pageSize
+        };
+    }
+
+    private NotFoundObjectResult SessionNotFound(Guid id) =>
+        NotFound(new ProblemDetails
+        {
+            Status = 404,
+            Title = "Session Not Found",
+            Detail = $"Analysis session {id} has expired or never existed."
+        });
 }

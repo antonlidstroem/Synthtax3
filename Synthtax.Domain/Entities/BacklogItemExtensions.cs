@@ -13,7 +13,7 @@
 //   2. Uppdaterad EF-konfiguration med de nya kolumnerna
 // ══════════════════════════════════════════════════════════════════════════
 
-using Synthtax.Core.Enums;
+
 using Synthtax.Domain.Enums;
 
 namespace Synthtax.Domain.Entities;

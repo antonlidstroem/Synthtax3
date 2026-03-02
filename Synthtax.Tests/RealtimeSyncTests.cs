@@ -3,6 +3,7 @@
 
 using FluentAssertions;
 using Synthtax.Realtime.Contracts;
+using NSubstitute;
 
 namespace Synthtax.Tests;
 

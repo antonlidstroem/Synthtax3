@@ -1,210 +1,119 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
-using Synthtax.Shared.SignalR;
+// ... (behåll befintliga usings)
+using Synthtax.Application.Services; // För IHubPusher och ICurrentUserService
 
-namespace Synthtax.Backend.Hubs;
+namespace Synthtax.Application.Orchestration;
 
-/// <summary>
-/// Synthtax SignalR Hub — server-sidan av realtidssynkroniseringen.
-///
-/// <para><b>Grupper:</b>
-/// Varje organisation har en dedikerad SignalR-grupp: <c>org:{orgId}</c>.
-/// Klienter prenumererar via <c>JoinOrganization</c> och events broadcastas
-/// enbart till den berörda organisationens grupp.</para>
-///
-/// <para><b>Autentisering:</b>
-/// JWT-token från Fas 5 valideras av <c>[Authorize]</c>.
-/// OrganizationId läses från claim <c>synthtax:org_id</c>.</para>
-///
-/// <para><b>Skalning:</b>
-/// Registreras med <c>AddStackExchangeRedisBackplane</c> i produktion
-/// (se <see cref="SignalRServiceExtensions"/>).</para>
-/// </summary>
-[Authorize]
-public sealed class SynthtaxHub : Hub
+public sealed class AnalysisOrchestrator : IAnalysisOrchestrator
 {
-    private readonly ILogger<SynthtaxHub> _logger;
+    private readonly SynthtaxDbContext _db;
+    private readonly IPluginRegistry _registry;
+    private readonly IFileScanner _scanner;
+    private readonly SyncEngine _syncEngine;
+    private readonly SyncWriter _syncWriter;
+    private readonly IHubPusher _hubPusher;          // NY: Fas 8
+    private readonly ICurrentUserService _user;     // NY: Fas 8
+    private readonly ILogger<AnalysisOrchestrator> _logger;
 
-    // Grupp-namnkonvention: "org:{guid:N}"
-    private static string OrgGroup(Guid orgId) => $"org:{orgId:N}";
-
-    public SynthtaxHub(ILogger<SynthtaxHub> logger)
+    public AnalysisOrchestrator(
+        SynthtaxDbContext db,
+        IPluginRegistry registry,
+        IFileScanner scanner,
+        SyncEngine syncEngine,
+        SyncWriter syncWriter,
+        IHubPusher hubPusher,                        // NY
+        ICurrentUserService user,                   // NY
+        ILogger<AnalysisOrchestrator> logger)
     {
+        _db = db;
+        _registry = registry;
+        _scanner = scanner;
+        _syncEngine = syncEngine;
+        _syncWriter = syncWriter;
+        _hubPusher = hubPusher;                      // NY
+        _user = user;                               // NY
         _logger = logger;
     }
 
-    // ── Anslutning ────────────────────────────────────────────────────────
-
-    public override async Task OnConnectedAsync()
+    public async Task<OrchestratorResult> RunAsync(OrchestratorRequest request, CancellationToken ct = default)
     {
-        var orgId = GetOrganizationId();
-        if (orgId is null)
+        var totalSw = Stopwatch.StartNew();
+        var errors = new List<string>();
+        var sessionId = Guid.NewGuid();
+
+        // ── FAS A: Skanning & analys (IO-tungt, utanför transaktion) ──
+        var (scannedIssues, scanDuration) = await RunScanPhaseAsync(request, errors, ct);
+
+        // ── FAS B: Transaktionell sync ──
+        OrchestratorResult result;
+        var syncSw = Stopwatch.StartNew();
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            _logger.LogWarning(
-                "SignalR: Klient {ConnId} saknar org_id-claim — kopplar ner.",
-                Context.ConnectionId);
-            Context.Abort();
-            return;
+            // Vi hämtar diffen och skriver till DB
+            result = await RunSyncPhaseAsync(request, sessionId, scannedIssues, errors, scanDuration, ct);
+
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            syncSw.Stop();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            _logger.LogError(ex, "Fel i sync-fas — transaktion återrullad.");
+            throw;
         }
 
-        // Lägg till klienten i organisations-gruppen
-        await Groups.AddToGroupAsync(Context.ConnectionId, OrgGroup(orgId.Value));
-
-        _logger.LogInformation(
-            "SignalR: Klient {ConnId} ansluten till org {OrgId}",
-            Context.ConnectionId, orgId);
-
-        await base.OnConnectedAsync();
-    }
-
-    public override async Task OnDisconnectedAsync(Exception? exception)
-    {
-        var orgId = GetOrganizationId();
-        if (orgId is not null)
+        // ── FAS C: Realtidsnotis (Pusha till VSIX efter lyckad commit) ──
+        // Detta är logiken du hade i extension-metoden tidigare
+        await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedPayload
         {
-            await Groups.RemoveFromGroupAsync(
-                Context.ConnectionId, OrgGroup(orgId.Value));
+            OrganizationId = _user.OrganizationId ?? Guid.Empty,
+            ProjectId = request.ProjectId,
+            SessionId = sessionId,
+            CompletedAt = DateTime.UtcNow,
+            NewIssuesCount = result.NewIssues,
+            ResolvedIssuesCount = result.ResolvedIssues,
+            TotalOpenIssues = result.TotalIssues,
+            HealthScore = result.OverallScore,
+            // Vi kan mappa de 5 senaste för en "snabbvy" i IDE:n
+            NewIssues = result.NewItemsSummary ?? new List<IssueSummary>()
+        });
 
-            _logger.LogInformation(
-                "SignalR: Klient {ConnId} frånkopplad från org {OrgId}. Orsak: {Reason}",
-                Context.ConnectionId, orgId,
-                exception?.Message ?? "normal disconnection");
-        }
-
-        await base.OnDisconnectedAsync(exception);
+        return result with { TotalDuration = totalSw.Elapsed };
     }
 
-    // ── Client → Server-metoder ───────────────────────────────────────────
+    // ... (RunScanPhaseAsync är oförändrad)
 
-    /// <summary>
-    /// Klienten bekräftar prenumeration (redundant med OnConnectedAsync,
-    /// men kan användas efter reconnect utan full re-connect).
-    /// </summary>
-    public async Task JoinOrganization(Guid organizationId)
+    private async Task<OrchestratorResult> RunSyncPhaseAsync(...)
     {
-        var claimOrgId = GetOrganizationId();
+        // 1. Ladda befintliga items (använd .AsTracking() då vi ska uppdatera dem)
+        var existingItems = await _db.BacklogItems
+            .Where(bi => bi.ProjectId == request.ProjectId && !bi.IsDeleted)
+            .ToDictionaryAsync(bi => bi.Fingerprint, StringComparer.Ordinal, ct);
 
-        // Säkerhetscheck: klienten får bara prenumerera på sin egna org
-        if (claimOrgId != organizationId)
+        // 2. Beräkna diff
+        var diff = _syncEngine.Compute(request.ProjectId, scannedIssues, existingItems);
+
+        // 3. Skriv diff (här uppdateras AutoClosed och ReopenedInSessionId från Fas 3)
+        // Se till att SyncWriter.WriteAsync returnerar objekten som lagts till/stängts
+        var writeResult = await _syncWriter.WriteAsync(diff, request, sessionId, ct);
+
+        // 4. Beräkna KPI:er
+        var activeAfterSync = await _db.BacklogItems
+            .Where(bi => bi.ProjectId == request.ProjectId && !bi.IsDeleted && bi.Status == BacklogStatus.Open)
+            .Select(bi => new ActiveIssueSummary(bi.Id, bi.SeverityOverride ?? bi.Rule.DefaultSeverity))
+            .ToListAsync(ct);
+
+        var session = new AnalysisSession { /* ... populera ... */ };
+        KpiCalculator.Populate(session, diff, activeAfterSync);
+        _db.AnalysisSessions.Add(session);
+
+        return new OrchestratorResult
         {
-            _logger.LogWarning(
-                "SignalR: Klient {ConnId} försökte join org {ReqOrg} men har claim {ClaimOrg}",
-                Context.ConnectionId, organizationId, claimOrgId);
-            return;
-        }
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, OrgGroup(organizationId));
-    }
-
-    public async Task LeaveOrganization(Guid organizationId)
-    {
-        await Groups.RemoveFromGroupAsync(
-            Context.ConnectionId, OrgGroup(organizationId));
-    }
-
-    /// <summary>Klienten pongat ett heartbeat — loggad för diagnostik.</summary>
-    public Task AcknowledgeHeartbeat(DateTime clientReceivedAt)
-    {
-        var latency = DateTime.UtcNow - clientReceivedAt;
-        _logger.LogDebug(
-            "SignalR heartbeat ACK från {ConnId} — latens {Ms} ms",
-            Context.ConnectionId, latency.TotalMilliseconds);
-        return Task.CompletedTask;
-    }
-
-    // ── Hjälpmetoder ──────────────────────────────────────────────────────
-
-    private Guid? GetOrganizationId()
-    {
-        var raw = Context.User?.FindFirst("synthtax:org_id")?.Value;
-        return Guid.TryParse(raw, out var id) ? id : null;
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ISynthtaxHubPusher  —  intern tjänst för att pusha events från bakgrundsjobbbet
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Kontrakt för att skicka events till anslutna VSIX-klienter.
-///
-/// <para>Implementeras av <see cref="SynthtaxHubPusher"/> och injiceras i
-/// analysationsorkestratorn (Fas 3) och bakgrundsjobbbet som triggar analyser.</para>
-///
-/// <para><b>Användning i Fas 3-orchestratorn:</b>
-/// <code>
-///   // Efter SyncAsync() har kommit tillbaka
-///   await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedPayload { ... });
-/// </code>
-/// </para>
-/// </summary>
-public interface ISynthtaxHubPusher
-{
-    /// <summary>Pushar ett AnalysisUpdated-event till alla klienter i organisationens grupp.</summary>
-    Task PushAnalysisUpdatedAsync(AnalysisUpdatedPayload payload, CancellationToken ct = default);
-
-    /// <summary>Pushar ett IssueStatusChanged-event.</summary>
-    Task PushIssueStatusChangedAsync(IssueStatusChangedPayload payload, CancellationToken ct = default);
-
-    /// <summary>Pushar ett LicenseChanged-event.</summary>
-    Task PushLicenseChangedAsync(LicenseChangedPayload payload, CancellationToken ct = default);
-
-    /// <summary>Skickar heartbeat till alla anslutna klienter.</summary>
-    Task PushHeartbeatAsync(HeartbeatPayload payload, CancellationToken ct = default);
-}
-
-/// <summary>
-/// Implementering av <see cref="ISynthtaxHubPusher"/> via <c>IHubContext{SynthtaxHub}</c>.
-/// Registreras som Singleton — IHubContext är thread-safe.
-/// </summary>
-public sealed class SynthtaxHubPusher : ISynthtaxHubPusher
-{
-    private readonly IHubContext<SynthtaxHub> _hub;
-    private readonly ILogger<SynthtaxHubPusher> _logger;
-
-    private static string OrgGroup(Guid orgId) => $"org:{orgId:N}";
-
-    public SynthtaxHubPusher(
-        IHubContext<SynthtaxHub>    hub,
-        ILogger<SynthtaxHubPusher> logger)
-    {
-        _hub    = hub;
-        _logger = logger;
-    }
-
-    public async Task PushAnalysisUpdatedAsync(AnalysisUpdatedPayload payload, CancellationToken ct = default)
-    {
-        _logger.LogInformation(
-            "SignalR push AnalysisUpdated → org {OrgId} (+{New} -{Resolved})",
-            payload.OrganizationId, payload.NewIssuesCount, payload.ResolvedIssuesCount);
-
-        await _hub.Clients
-            .Group(OrgGroup(payload.OrganizationId))
-            .SendAsync(HubMethods.AnalysisUpdated, payload, ct);
-    }
-
-    public async Task PushIssueStatusChangedAsync(IssueStatusChangedPayload payload, CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "SignalR push IssueStatusChanged → org {OrgId} issue {IssueId} {Old}→{New}",
-            payload.OrganizationId, payload.IssueId, payload.OldStatus, payload.NewStatus);
-
-        await _hub.Clients
-            .Group(OrgGroup(payload.OrganizationId))
-            .SendAsync(HubMethods.IssueStatusChanged, payload, ct);
-    }
-
-    public async Task PushLicenseChangedAsync(LicenseChangedPayload payload, CancellationToken ct = default)
-    {
-        await _hub.Clients
-            .Group(OrgGroup(payload.OrganizationId))
-            .SendAsync(HubMethods.LicenseChanged, payload, ct);
-    }
-
-    public async Task PushHeartbeatAsync(HeartbeatPayload payload, CancellationToken ct = default)
-    {
-        // Skickas till ALLA anslutna klienter (inte grupp-specifikt)
-        await _hub.Clients.All.SendAsync(HubMethods.Heartbeat, payload, ct);
+            // ... populera ...
+            OverallScore = session.OverallScore,
+            NewItemsSummary = writeResult.AddedItems.Select(i => new IssueSummary(i.Id, i.Title)).ToList()
+        };
     }
 }

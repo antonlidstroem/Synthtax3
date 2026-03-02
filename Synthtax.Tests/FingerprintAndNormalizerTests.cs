@@ -6,6 +6,7 @@ using FluentAssertions;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Fingerprinting;
 using Synthtax.Core.Normalization;
+using NSubstitute;
 
 namespace Synthtax.Tests;
 

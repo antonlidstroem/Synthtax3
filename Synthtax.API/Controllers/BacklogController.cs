@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
+using Synthtax.Domain.Enums;
 
 namespace Synthtax.API.Controllers;
 

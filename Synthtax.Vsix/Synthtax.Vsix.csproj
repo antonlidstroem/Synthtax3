@@ -1,80 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
+		<OutputType>Library</OutputType>
+		<RootNamespace>Synthtax.Vsix</RootNamespace>
+		<AssemblyName>Synthtax.Vsix</AssemblyName>
+	</PropertyGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <LangVersion>12</LangVersion>
-    <RootNamespace>Synthtax.Vsix</RootNamespace>
-    <AssemblyName>Synthtax.Vsix</AssemblyName>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.9383" />
+		<PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.2163" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.1" />
+	</ItemGroup>
 
-    <!-- VSIX packaging -->
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
-    <UseWPF>true</UseWPF>
-  </PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
+		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+		<ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
+	</ItemGroup>
 
-  <!-- NuGet Packages -->
-  <ItemGroup>
-    <!-- VS SDK -->
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="18.1.32453.80" />
-    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="17.6.63" />
-
-    <!-- MVVM -->
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.1" />
-
-    <!-- HTTP & JSON -->
-    <PackageReference Include="System.Net.Http.Json" Version="9.0.0" />
-    <PackageReference Include="System.Text.Json" Version="9.0.0" />
-
-    <!-- SignalR Fas8 -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Connections.Client" Version="8.0.0" />
-
-    <!-- Logging -->
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
-  </ItemGroup>
-
-  <!-- Källfiler -->
-  <ItemGroup>
-    <!-- Package -->
-    <Compile Include="Package\**\*.cs" />
-
-    <!-- Client -->
-    <Compile Include="Client\**\*.cs" />
-
-    <!-- Auth -->
-    <Compile Include="Auth\**\*.cs" />
-
-    <!-- Analyzers -->
-    <Compile Include="Analyzers\**\*.cs" />
-
-    <!-- CodeFixes -->
-    <Compile Include="CodeFixes\**\*.cs" />
-
-    <!-- Tool Window -->
-    <Compile Include="ToolWindow\**\*.cs" />
-
-    <!-- Commands -->
-    <Compile Include="Commands\**\*.cs" />
-
-    <!-- Services -->
-    <Compile Include="Services\**\*.cs" />
-
-    <!-- SignalR Fas8 -->
-    <Compile Include="SignalR\**\*.cs" />
-  </ItemGroup>
-
-  <!-- XAML -->
-  <ItemGroup>
-    <Page Include="Auth\LoginDialog.xaml" SubType="Designer" Generator="MSBuild:Compile" />
-    <Page Include="ToolWindow\Views\BacklogToolWindowControl.xaml" SubType="Designer" Generator="MSBuild:Compile" />
-  </ItemGroup>
-
-  <!-- VSIX Manifest -->
-  <ItemGroup>
-    <None Include="source.extension.vsixmanifest" />
-  </ItemGroup>
-
+	<ItemGroup>
+		<None Include="source.extension.vsixmanifest">
+			<SubType>Designer</SubType>
+		</None>
+	</ItemGroup>
 </Project>

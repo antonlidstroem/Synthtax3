@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Synthtax.Domain.Entities;
+using Synthtax.Infrastructure.Services;
 
 namespace Synthtax.Infrastructure.Data.Interceptors;
 
@@ -88,8 +89,8 @@ public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
 /// Abstraherar identifiering av inloggad användare.
 /// Implementeras i Synthtax.API via IHttpContextAccessor.
 /// </summary>
-public interface ICurrentUserService
-{
-    /// <summary>Null om anropet sker utanför en HTTP-request (t.ex. bakgrundsjobbbet).</summary>
-    string? UserId { get; }
-}
+//public interface ICurrentUserService
+//{
+//    /// <summary>Null om anropet sker utanför en HTTP-request (t.ex. bakgrundsjobbbet).</summary>
+//    string? UserId { get; }
+//}

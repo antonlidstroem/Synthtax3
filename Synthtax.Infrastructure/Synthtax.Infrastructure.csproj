@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net9.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>Synthtax.Infrastructure</RootNamespace>
@@ -9,6 +9,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
@@ -30,6 +32,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
 		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
 		<ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
 	</ItemGroup>

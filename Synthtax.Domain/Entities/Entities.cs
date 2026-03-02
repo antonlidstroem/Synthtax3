@@ -124,55 +124,55 @@ public class AnalysisSession : AuditableEntity
 /// <para>MIGRATION: Ersätter befintlig BacklogItem-entitet.
 /// Se MIGRATION_NOTES.md för steg.</para>
 /// </summary>
-public class BacklogItem : AuditableEntity, ISoftDeletable
-{
-    public Guid   Id        { get; set; } = Guid.NewGuid();
-    public Guid   ProjectId { get; set; }
-    public string RuleId    { get; set; } = string.Empty;
+//public class BacklogItem : AuditableEntity, ISoftDeletable
+//{
+//    public Guid   Id        { get; set; } = Guid.NewGuid();
+//    public Guid   ProjectId { get; set; }
+//    public string RuleId    { get; set; } = string.Empty;
 
-    public bool AutoClosed { get; set; }
-    public Guid? AutoClosedInSessionId { get; set; }
-    public Guid? ReopenedInSessionId { get; set; }
+//    public bool AutoClosed { get; set; }
+//    public Guid? AutoClosedInSessionId { get; set; }
+//    public Guid? ReopenedInSessionId { get; set; }
 
-    /// <summary>
-    /// SHA-256-fingerprint som unikt identifierar denna issue inom projektet.
-    /// Beräknas av <see cref="Synthtax.Domain.Services.FingerprintService"/>:
-    ///   SHA256(RuleId | normaliserad_filsökväg | radnummer | snippet[..64])
-    /// </summary>
-    public string Fingerprint { get; set; } = string.Empty;
+//    /// <summary>
+//    /// SHA-256-fingerprint som unikt identifierar denna issue inom projektet.
+//    /// Beräknas av <see cref="Synthtax.Domain.Services.FingerprintService"/>:
+//    ///   SHA256(RuleId | normaliserad_filsökväg | radnummer | snippet[..64])
+//    /// </summary>
+//    public string Fingerprint { get; set; } = string.Empty;
 
-    public BacklogStatus Status { get; set; } = BacklogStatus.Open;
+//    public BacklogStatus Status { get; set; } = BacklogStatus.Open;
 
-    /// <summary>Null = använd Rule.DefaultSeverity.</summary>
-    public Severity? SeverityOverride { get; set; }
+//    /// <summary>Null = använd Rule.DefaultSeverity.</summary>
+//    public Severity? SeverityOverride { get; set; }
 
-    /// <summary>
-    /// JSON-blob med analysspecifik metadata som inte passar i fasta kolumner.
-    /// Exempel: { "filePath": "src/Foo.cs", "lineNumber": 42, "snippet": "...", "methodName": "Bar" }
-    /// </summary>
-    public string? Metadata { get; set; }
+//    /// <summary>
+//    /// JSON-blob med analysspecifik metadata som inte passar i fasta kolumner.
+//    /// Exempel: { "filePath": "src/Foo.cs", "lineNumber": 42, "snippet": "...", "methodName": "Bar" }
+//    /// </summary>
+//    public string? Metadata { get; set; }
 
-    /// <summary>Vilken session som senast bekräftade att denna issue existerar.</summary>
-    public Guid? LastSeenInSessionId { get; set; }
+//    /// <summary>Vilken session som senast bekräftade att denna issue existerar.</summary>
+//    public Guid? LastSeenInSessionId { get; set; }
 
-    public Guid TenantId { get; set; }
+//    public Guid TenantId { get; set; }
 
-    // ── Optimistic Concurrency ─────────────────────────────────────────────
-    public byte[] RowVersion { get; set; } = [];
+//    // ── Optimistic Concurrency ─────────────────────────────────────────────
+//    public byte[] RowVersion { get; set; } = [];
 
-    // ── Soft Delete ────────────────────────────────────────────────────────
-    public bool      IsDeleted { get; set; }
-    public DateTime? DeletedAt { get; set; }
-    public string?   DeletedBy { get; set; }
+//    // ── Soft Delete ────────────────────────────────────────────────────────
+//    public bool      IsDeleted { get; set; }
+//    public DateTime? DeletedAt { get; set; }
+//    public string?   DeletedBy { get; set; }
 
-    public Project  Project  { get; set; } = null!;
-    public Rule     Rule     { get; set; } = null!;
-    public ICollection<Comment> Comments { get; set; } = [];
+//    public Project  Project  { get; set; } = null!;
+//    public Rule     Rule     { get; set; } = null!;
+//    public ICollection<Comment> Comments { get; set; } = [];
 
-    /// <summary>Effektiv svårighetsgrad. Kräver att Rule är inkluderad i queryn.</summary>
-    public Severity EffectiveSeverity =>
-        SeverityOverride ?? Rule?.DefaultSeverity ?? Severity.Medium;
-}
+//    /// <summary>Effektiv svårighetsgrad. Kräver att Rule är inkluderad i queryn.</summary>
+//    public Severity EffectiveSeverity =>
+//        SeverityOverride ?? Rule?.DefaultSeverity ?? Severity.Medium;
+//}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Comment

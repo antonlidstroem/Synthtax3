@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
+using Synthtax.Domain.Enums;
 
 namespace Synthtax.Analysis.Languages.Css;
 
@@ -329,7 +330,7 @@ file sealed class MissingVendorPrefixRule : ILanguageRule
 }
 
 // WEB006 – Empty rule block
-file sealed class EmptyRuleRule : ILanguageRule
+file sealed class EmptyRuleRule : Core.Interfaces.ILanguageRule
 {
     public string   RuleId          => "WEB006";
     public string   Name            => "Empty rule block";

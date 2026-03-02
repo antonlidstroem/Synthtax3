@@ -2,10 +2,10 @@ using Synthtax.API.Services;
 
 using Synthtax.API.Services.Background;
 using Synthtax.Core.Interfaces;
-using Synthtax.Analysis;
 using Synthtax.Analysis.Pipeline;
 using Synthtax.Analysis.Services;
 using Synthtax.Analysis.Workspace;
+using Synthtax.Analysis.Extensions;
 
 namespace Synthtax.API.Extensions;
 
