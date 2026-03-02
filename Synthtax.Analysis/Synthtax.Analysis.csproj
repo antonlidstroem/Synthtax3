@@ -12,13 +12,13 @@
 
   <ItemGroup>
     <!-- Roslyn / MSBuild Workspace -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"                Version="4.8.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"     Version="4.8.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild"    Version="4.8.0" />
-    <PackageReference Include="Microsoft.Build.Locator"                      Version="1.7.8" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
 
     <!-- Git -->
-    <PackageReference Include="LibGit2Sharp"                                 Version="0.30.0" />
+    <PackageReference Include="LibGit2Sharp" Version="0.30.0" />
 
 	  <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
 	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />

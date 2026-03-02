@@ -1,4 +1,4 @@
-namespace Synthtax.Core.Orchestration;
+namespace Synthtax.Application.Orchestration;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IFileScanner

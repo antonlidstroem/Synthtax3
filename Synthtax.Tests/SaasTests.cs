@@ -16,7 +16,7 @@ using Synthtax.Domain.ValueObjects;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Services;
 
-namespace Synthtax.Tests.SaaS;
+namespace Synthtax.Tests;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LicenseLimits — värdeobject

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Synthtax.Analysis.Rules;
 using Synthtax.Core.Contracts;
 
-namespace Synthtax.Analysis.Plugin;
+namespace Synthtax.Analysis.Plugins;
 
 /// <summary>
 /// Fas 6-plugin som kör strukturella regler på C#-kod:

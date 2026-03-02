@@ -7,7 +7,7 @@ using Synthtax.Shared.SignalR;
 using Synthtax.Vsix.Services;
 using Synthtax.Vsix.SignalR;
 
-namespace Synthtax.Tests.Fas8;
+namespace Synthtax.Tests;
 
 // ════════════════════════════════════════════════════════════════════════
 // HubMethods — konstant-validering

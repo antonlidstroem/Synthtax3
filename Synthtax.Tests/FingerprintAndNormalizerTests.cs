@@ -7,7 +7,7 @@ using Synthtax.Core.Contracts;
 using Synthtax.Core.Fingerprinting;
 using Synthtax.Core.Normalization;
 
-namespace Synthtax.Tests.Core;
+namespace Synthtax.Tests;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FingerprintService — enhetstester

@@ -9,7 +9,7 @@ using System.Windows;
 using System.Windows.Media;
 
 // Simulerade typer för testbarhet utan VS SDK beroende
-namespace Synthtax.Tests.Fas7;
+namespace Synthtax.Tests;
 
 // ════════════════════════════════════════════════════════════════════════
 // Simulerade DTO-typer (speglar Synthtax.Vsix.Client)

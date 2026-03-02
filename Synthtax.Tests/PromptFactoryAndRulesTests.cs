@@ -9,7 +9,7 @@ using Synthtax.Application.PromptFactory;
 using Synthtax.Core.Enums;
 using Synthtax.Core.PromptFactory;
 
-namespace Synthtax.Tests.Fas6;
+namespace Synthtax.Tests;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Hjälpmetoder — delade av alla testklasser

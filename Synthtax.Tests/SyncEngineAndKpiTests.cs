@@ -11,7 +11,7 @@ using Synthtax.Core.Orchestration;
 using Synthtax.Domain.Entities;
 using Synthtax.Domain.Enums;
 
-namespace Synthtax.Tests.Application;
+namespace Synthtax.Tests;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SyncEngine — enhetstester

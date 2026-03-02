@@ -33,6 +33,10 @@ public class SynthtaxDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BacklogItem>     BacklogItems     => Set<BacklogItem>();
     public DbSet<Comment>         Comments         => Set<Comment>();
 
+    public DbSet<WatchdogAlert> WatchdogAlerts { get; set; }
+    public DbSet<PluginTelemetry> PluginTelemetry { get; set; }
+    public DbSet<WatchdogRun> WatchdogRuns { get; set; }
+
     public SynthtaxDbContext(
         DbContextOptions<SynthtaxDbContext> options,
         ICurrentUserService? currentUser = null)
@@ -46,6 +50,10 @@ public class SynthtaxDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.ApplyConfiguration(new WatchdogAlertConfiguration());
+        modelBuilder.ApplyConfiguration(new PluginTelemetryConfiguration());
+        modelBuilder.ApplyConfiguration(new WatchdogRunConfiguration());
 
         // Fluent API — hämtar alla IEntityTypeConfiguration<T> i assemblyt automatiskt
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RuleConfiguration).Assembly);

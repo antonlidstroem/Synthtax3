@@ -1,92 +1,80 @@
-<Project Sdk="Microsoft.VisualStudio.Sdk.BuildTasks/17.6.2164">
+<Project Sdk="Microsoft.NET.Sdk">
 
-
-	
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <RootNamespace>Synthtax.Vsix</RootNamespace>
     <AssemblyName>Synthtax.Vsix</AssemblyName>
 
     <!-- VSIX packaging -->
-    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
-    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
-    <IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
-    <DeployExtension>true</DeployExtension>
-    <UseCodebase>true</UseCodebase>
-    <EnableDefaultItems>false</EnableDefaultItems>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
-  <!-- NuGet-paket -->
+  <!-- NuGet Packages -->
   <ItemGroup>
     <!-- VS SDK -->
-    <PackageReference Include="Microsoft.VisualStudio.SDK"              Version="17.6.36389" ExcludeAssets="Runtime" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools"             Version="17.6.2164"  />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="18.1.32453.80" />
+    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="17.6.63" />
 
-    <!-- Roslyn Analyzers & Code Fixes -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers"         Version="3.3.4" />
-
-    <!-- WPF (net472 har WPF inbyggt — ingen extra ref) -->
+    <!-- MVVM -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.1" />
 
     <!-- HTTP & JSON -->
-    <PackageReference Include="System.Net.Http.Json"                   Version="9.0.0" />
-    <PackageReference Include="System.Text.Json"                       Version="9.0.0" />
+    <PackageReference Include="System.Net.Http.Json" Version="9.0.0" />
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
 
-    <!-- Säker credential-lagring -->
-    <PackageReference Include="Microsoft.VisualStudio.SecureStorage"   Version="17.0.31902" />
+    <!-- SignalR Fas8 -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Connections.Client" Version="8.0.0" />
 
-    <!-- Community Toolkit MVVM för WPF ViewModels -->
-    <PackageReference Include="CommunityToolkit.Mvvm"                  Version="9.2.2" />
+    <!-- Logging -->
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
   </ItemGroup>
 
-  <!-- Projektets egna filer -->
+  <!-- Källfiler -->
   <ItemGroup>
     <!-- Package -->
-    <Compile Include="Package\SynthtaxPackage.cs" />
-    <Compile Include="Package\SynthtaxPackageGuids.cs" />
+    <Compile Include="Package\**\*.cs" />
 
     <!-- Client -->
-    <Compile Include="Client\SynthtaxApiClient.cs" />
-    <Compile Include="Client\BacklogItemDto.cs" />
+    <Compile Include="Client\**\*.cs" />
 
     <!-- Auth -->
-    <Compile Include="Auth\LoginDialog.xaml.cs" />
-    <Compile Include="Auth\CredentialStore.cs" />
-    <Compile Include="Auth\AuthTokenService.cs" />
+    <Compile Include="Auth\**\*.cs" />
 
     <!-- Analyzers -->
-    <Compile Include="Analyzers\SynthtaxDiagnosticProvider.cs" />
-    <Compile Include="Analyzers\SynthtaxDiagnosticIds.cs" />
+    <Compile Include="Analyzers\**\*.cs" />
 
-    <!-- Code Fixes -->
-    <Compile Include="CodeFixes\SynthtaxCodeFixProvider.cs" />
+    <!-- CodeFixes -->
+    <Compile Include="CodeFixes\**\*.cs" />
 
     <!-- Tool Window -->
-    <Compile Include="ToolWindow\BacklogToolWindow.cs" />
-    <Compile Include="ToolWindow\Views\BacklogToolWindowControl.xaml.cs" />
-    <Compile Include="ToolWindow\ViewModels\BacklogToolWindowViewModel.cs" />
-    <Compile Include="ToolWindow\ViewModels\BacklogItemViewModel.cs" />
-    <Compile Include="ToolWindow\Converters\SeverityToColorConverter.cs" />
-    <Compile Include="ToolWindow\Converters\StatusToIconConverter.cs" />
+    <Compile Include="ToolWindow\**\*.cs" />
 
     <!-- Commands -->
-    <Compile Include="Commands\OpenBacklogCommand.cs" />
-    <Compile Include="Commands\RefreshBacklogCommand.cs" />
+    <Compile Include="Commands\**\*.cs" />
 
     <!-- Services -->
-    <Compile Include="Services\PromptDispatchService.cs" />
+    <Compile Include="Services\**\*.cs" />
 
-    <!-- WPF XAML -->
-    <Page Include="Auth\LoginDialog.xaml"                        SubType="Designer" Generator="MSBuild:Compile" />
+    <!-- SignalR Fas8 -->
+    <Compile Include="SignalR\**\*.cs" />
+  </ItemGroup>
+
+  <!-- XAML -->
+  <ItemGroup>
+    <Page Include="Auth\LoginDialog.xaml" SubType="Designer" Generator="MSBuild:Compile" />
     <Page Include="ToolWindow\Views\BacklogToolWindowControl.xaml" SubType="Designer" Generator="MSBuild:Compile" />
   </ItemGroup>
 
-  <!-- VSIX-innehåll -->
+  <!-- VSIX Manifest -->
   <ItemGroup>
-    <VSIXSourceItem Include="source.extension.vsixmanifest" />
+    <None Include="source.extension.vsixmanifest" />
   </ItemGroup>
 
 </Project>

@@ -4,7 +4,7 @@
 using FluentAssertions;
 using Synthtax.Realtime.Contracts;
 
-namespace Synthtax.Tests.Fas8;
+namespace Synthtax.Tests;
 
 // ════════════════════════════════════════════════════════════════════════
 // HubMethodNames — string-konstanter

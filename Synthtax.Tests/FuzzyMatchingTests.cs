@@ -14,7 +14,7 @@ using Synthtax.Core.Tokenization;
 using Synthtax.Domain.Entities;
 using Synthtax.Domain.Enums;
 
-namespace Synthtax.Tests.Core;
+namespace Synthtax.Tests;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // StructuralTokenizer
