@@ -1,29 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<TargetFramework>net9.0-windows</TargetFramework>
-		<Nullable>enable</Nullable>
-		<UseWPF>true</UseWPF>
-		<OutputType>Library</OutputType>
-		<RootNamespace>Synthtax.Vsix</RootNamespace>
-		<AssemblyName>Synthtax.Vsix</AssemblyName>
-	</PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.9383" />
-		<PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.2163" />
-		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
-		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.1" />
-	</ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Synthtax.Vsix</RootNamespace>
+    <AssemblyName>Synthtax.Vsix</AssemblyName>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
-		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
-		<ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK"          Version="17.12.9383" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools"          Version="17.12.2163" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"  Version="9.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm"               Version="8.3.1" />
+  </ItemGroup>
 
-	<ItemGroup>
-		<None Include="source.extension.vsixmanifest">
-			<SubType>Designer</SubType>
-		</None>
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
+    <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+    <ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
+    <ProjectReference Include="..\Synthtax.Realtime\Synthtax.Realtime.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+
 </Project>

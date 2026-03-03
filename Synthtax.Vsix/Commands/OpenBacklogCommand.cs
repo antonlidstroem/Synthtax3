@@ -1,21 +1,12 @@
 using System.ComponentModel.Design;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using Synthtax.Vsix.Auth;
 using Synthtax.Vsix.Package;
+using Synthtax.Vsix.ToolWindow;
+using Synthtax.Vsix.ToolWindow.ViewModels;
 
 namespace Synthtax.Vsix.Commands;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// OpenBacklogCommand
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Kommando: <b>View → Other Windows → Synthtax Backlog</b>.
-/// Öppnar (eller fokuserar) BacklogToolWindow.
-///
-/// <para>Kortkommando: konfigureras i .vsct som Alt+Shift+S B.</para>
-/// </summary>
 internal sealed class OpenBacklogCommand
 {
     private readonly AsyncPackage _package;
@@ -23,13 +14,10 @@ internal sealed class OpenBacklogCommand
     private OpenBacklogCommand(AsyncPackage package, OleMenuCommandService commandService)
     {
         _package = package;
-
         var cmdId = new CommandID(
             SynthtaxPackageGuids.CommandSetGuid,
             SynthtaxPackageGuids.OpenBacklogCommandId);
-
-        var cmd = new MenuCommand(Execute, cmdId);
-        commandService.AddCommand(cmd);
+        commandService.AddCommand(new MenuCommand(Execute, cmdId));
     }
 
     public static async Task InitializeAsync(AsyncPackage package)
@@ -44,29 +32,19 @@ internal sealed class OpenBacklogCommand
     private void Execute(object sender, EventArgs e)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
-
         _ = _package.JoinableTaskFactory.RunAsync(async () =>
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var window = await _package.ShowToolWindowAsync(
-                typeof(ToolWindow.BacklogToolWindow),
-                id:      0,
-                create:  true,
+                typeof(BacklogToolWindow),
+                id:     0,
+                create: true,
                 cancellationToken: CancellationToken.None);
-
             ((IVsWindowFrame?)window)?.Show();
         });
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// RefreshBacklogCommand
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Kommando: <b>Synthtax → Refresh Backlog</b>.
-/// Triggar en ny API-hämtning utan att öppna fönstret om det är stängt.
-/// </summary>
 internal sealed class RefreshBacklogCommand
 {
     private readonly AsyncPackage _package;
@@ -74,12 +52,9 @@ internal sealed class RefreshBacklogCommand
     private RefreshBacklogCommand(AsyncPackage package, OleMenuCommandService commandService)
     {
         _package = package;
-
         var cmdId = new CommandID(
             SynthtaxPackageGuids.CommandSetGuid,
             SynthtaxPackageGuids.RefreshBacklogCommandId);
-
-        // OleMenuCommand (istf MenuCommand) ger oss BeforeQueryStatus
         var cmd = new OleMenuCommand(Execute, cmdId);
         cmd.BeforeQueryStatus += OnBeforeQueryStatus;
         commandService.AddCommand(cmd);
@@ -96,7 +71,6 @@ internal sealed class RefreshBacklogCommand
 
     private void OnBeforeQueryStatus(object sender, EventArgs e)
     {
-        // Visa bara kommandot när en solution är öppen
         ThreadHelper.ThrowIfNotOnUIThread();
         if (sender is OleMenuCommand cmd)
         {
@@ -108,23 +82,27 @@ internal sealed class RefreshBacklogCommand
 
     private void Execute(object sender, EventArgs e)
     {
+        // BUGFIX #1: Execute-bodyn var helt tom — knappen gjorde ingenting.
+        // Nu hämtar vi ViewModeln korrekt och anropar RefreshCommand.
         _ = _package.JoinableTaskFactory.RunAsync(async () =>
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            // Hitta det öppna Tool Window-fönstret (utan att skapa ett nytt)
-            var frame = await _package.FindToolWindowAsync(
-                typeof(ToolWindow.BacklogToolWindow),
+            // Hämta (eller skapa) tool window-pane
+            var pane = await _package.FindToolWindowAsync(
+                typeof(BacklogToolWindow),
                 id:     0,
                 create: false,
-                cancellationToken: CancellationToken.None) as IVsWindowFrame;
+                cancellationToken: CancellationToken.None) as BacklogToolWindow;
 
-            if (frame?.GetProperty(
-                    (int)__VSFPROPID.VSFPROPID_DocView,
-                    out var docView) == Microsoft.VisualStudio.VSConstants.S_OK
-                && docView is ToolWindow.BacklogToolWindow tw)
+            if (pane is null) return; // fönstret inte öppet
+
+            // BacklogToolWindow exponerar sin ViewModel via Content
+            if (pane.Content is System.Windows.FrameworkElement fe
+                && fe.DataContext is BacklogToolWindowViewModel vm)
             {
-                // Kick refresh via ViewModel (upphämtning via reflection eller direkt cast)
+                if (vm.RefreshCommand.CanExecute(null))
+                    await vm.RefreshCommand.ExecuteAsync(null);
             }
         });
     }

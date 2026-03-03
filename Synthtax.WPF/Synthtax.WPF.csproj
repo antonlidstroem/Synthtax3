@@ -42,6 +42,7 @@
     <ProjectReference Include="..\Synthtax.Analysis\Synthtax.Analysis.csproj" />
     <ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
     <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+    <ProjectReference Include="..\Synthtax.Realtime\Synthtax.Realtime.csproj" />
   </ItemGroup>
 
 </Project>

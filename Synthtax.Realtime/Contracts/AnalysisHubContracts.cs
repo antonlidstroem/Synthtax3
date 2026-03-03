@@ -1,146 +1,117 @@
 namespace Synthtax.Realtime.Contracts;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Hub-metodnamn  — strängar som delas av server och VSIX-klient
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Konstanter för SignalR-metodnamn.
-///
-/// <para>Namnkonvention: PascalCase, speglar server-metoden.
-/// Klient-handlers registreras med samma sträng via
-/// <c>HubConnection.On(HubMethodNames.AnalysisUpdated, …)</c>.</para>
-/// </summary>
+/// <summary>Kanonisk lista över alla SignalR-metodnamn.</summary>
 public static class HubMethodNames
 {
-    // ── Server → Klient (push-event) ───────────────────────────────────────
-    /// <summary>Analyssession slutförd — hela backloggen har uppdaterats.</summary>
-    public const string AnalysisUpdated      = "AnalysisUpdated";
+    // Server → Klient
+    public const string AnalysisUpdated    = "AnalysisUpdated";
+    public const string IssueCreated       = "IssueCreated";
+    public const string IssueClosed        = "IssueClosed";
+    public const string IssueStatusChanged = "IssueStatusChanged";
+    public const string HealthScoreUpdated = "HealthScoreUpdated";
+    public const string LicenseChanged     = "LicenseChanged";
+    public const string Heartbeat          = "Heartbeat";
 
-    /// <summary>Ett enskilt nytt issue har skapats.</summary>
-    public const string IssueCreated         = "IssueCreated";
-
-    /// <summary>Ett enskilt issue har stängts/lösts automatiskt.</summary>
-    public const string IssueClosed          = "IssueClosed";
-
-    /// <summary>Projekthälsopoängen har förändrats (ny scan eller manual-fix).</summary>
-    public const string HealthScoreUpdated   = "HealthScoreUpdated";
-
-    /// <summary>En plan-/licensändring har skett i org:en.</summary>
-    public const string LicenseChanged       = "LicenseChanged";
-
-    // ── Klient → Server (joins) ────────────────────────────────────────────
-    /// <summary>Klienten prenumererar på en organisations events.</summary>
+    // Klient → Server
     public const string JoinOrgGroup         = "JoinOrgGroup";
-
-    /// <summary>Klienten lämnar en organisations event-grupp.</summary>
     public const string LeaveOrgGroup        = "LeaveOrgGroup";
+    public const string AcknowledgeHeartbeat = "AcknowledgeHeartbeat";
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Event-payload DTOs
-// ═══════════════════════════════════════════════════════════════════════════
+// ─── Server → Klient events ──────────────────────────────────────────────────
 
-/// <summary>
-/// Payload för <see cref="HubMethodNames.AnalysisUpdated"/>.
-/// Skickas när en komplett analyssession är klar.
-/// </summary>
 public sealed record AnalysisUpdatedEvent
 {
-    /// <summary>Organisation/tenant som körde analysen.</summary>
-    public required Guid   OrganizationId  { get; init; }
-
-    /// <summary>Projekt som analyserades.</summary>
-    public required Guid   ProjectId       { get; init; }
-
-    /// <summary>Projektnamn för display i VSIX.</summary>
-    public required string ProjectName     { get; init; }
-
-    /// <summary>Ny hälsopoäng (0–100).</summary>
-    public required double HealthScore     { get; init; }
-
-    /// <summary>Totalt antal öppna issues efter sessionen.</summary>
-    public required int    TotalIssues     { get; init; }
-
-    /// <summary>Antal nya issues i denna session.</summary>
-    public required int    NewIssueCount   { get; init; }
-
-    /// <summary>Antal auto-stängda issues i denna session.</summary>
-    public required int    ClosedIssueCount { get; init; }
-
-    /// <summary>Tidpunkt för analysen (UTC).</summary>
-    public required DateTime AnalyzedAt    { get; init; }
-
-    /// <summary>
-    /// Inkluderade issues (paginerat; max 50 per event).
-    /// Tom om <see cref="TotalIssues"/> är noll.
-    /// </summary>
-    public IReadOnlyList<HubBacklogItem> Issues { get; init; } = [];
-
-    public bool HasChanges => NewIssueCount > 0 || ClosedIssueCount > 0;
+    public required Guid                          OrganizationId   { get; init; }
+    public required Guid                          ProjectId        { get; init; }
+    public required string                        ProjectName      { get; init; }
+    public required double                        HealthScore      { get; init; }
+    public required int                           TotalIssues      { get; init; }
+    public required int                           NewIssueCount    { get; init; }
+    public required int                           ClosedIssueCount { get; init; }
+    public required DateTime                      AnalyzedAt       { get; init; }
+    public          Guid                          SessionId        { get; init; }
+    public          IReadOnlyList<HubBacklogItem> Issues           { get; init; } = [];
+    public          IReadOnlyList<Guid>           ClosedIssueIds   { get; init; } = [];
+    public          bool HasChanges => NewIssueCount > 0 || ClosedIssueCount > 0;
 }
 
-/// <summary>
-/// Payload för <see cref="HubMethodNames.IssueCreated"/>.
-/// Skickas per-issue för inkrementell update vid stora kodbaser.
-/// </summary>
 public sealed record IssueCreatedEvent
 {
-    public required Guid   OrganizationId { get; init; }
-    public required Guid   IssueId        { get; init; }
-    public required string RuleId         { get; init; }
-    public required string Severity       { get; init; }
-    public required string FilePath       { get; init; }
-    public required int    StartLine      { get; init; }
-    public required string Message        { get; init; }
-    public          string? ClassName     { get; init; }
-    public          string? MemberName    { get; init; }
+    public required Guid    OrganizationId { get; init; }
+    public required Guid    IssueId        { get; init; }
+    public required string  RuleId         { get; init; }
+    public required string  Severity       { get; init; }
+    public required string  FilePath       { get; init; }
+    public required int     StartLine      { get; init; }
+    public required string  Message        { get; init; }
+    public          string? ClassName      { get; init; }
+    public          string? MemberName     { get; init; }
 }
 
-/// <summary>
-/// Payload för <see cref="HubMethodNames.IssueClosed"/>.
-/// </summary>
 public sealed record IssueClosedEvent
 {
     public required Guid   OrganizationId { get; init; }
     public required Guid   IssueId        { get; init; }
     public required string RuleId         { get; init; }
     public required string FilePath       { get; init; }
-    public required string Reason         { get; init; } // "AutoClosed" | "Resolved" | "FalsePositive"
+    /// <summary>"AutoClosed" | "Resolved" | "FalsePositive"</summary>
+    public required string Reason         { get; init; }
 }
 
-/// <summary>
-/// Payload för <see cref="HubMethodNames.HealthScoreUpdated"/>.
-/// </summary>
+public sealed record IssueStatusChangedEvent
+{
+    public required Guid     OrganizationId { get; init; }
+    public required Guid     IssueId        { get; init; }
+    public required string   OldStatus      { get; init; }
+    public required string   NewStatus      { get; init; }
+    public required string   ChangedByUser  { get; init; }
+    public required DateTime ChangedAt      { get; init; }
+}
+
 public sealed record HealthScoreUpdatedEvent
 {
-    public required Guid   OrganizationId { get; init; }
-    public required Guid   ProjectId      { get; init; }
-    public required double OldScore       { get; init; }
-    public required double NewScore       { get; init; }
-    public required int    TotalIssues    { get; init; }
-    public required int    CriticalCount  { get; init; }
-    public required int    HighCount      { get; init; }
-    public required DateTime ChangedAt    { get; init; }
-    public double Delta => NewScore - OldScore;
+    public required Guid     OrganizationId { get; init; }
+    public required Guid     ProjectId      { get; init; }
+    public required double   OldScore       { get; init; }
+    public required double   NewScore       { get; init; }
+    public required int      TotalIssues    { get; init; }
+    public required int      CriticalCount  { get; init; }
+    public required int      HighCount      { get; init; }
+    public required DateTime ChangedAt      { get; init; }
+    public          double   Delta          => NewScore - OldScore;
 }
 
-/// <summary>
-/// Kompakt issue-representation inuti <see cref="AnalysisUpdatedEvent"/>.
-/// Speglar <c>BacklogItemDto</c> men är optimerad för hub-transport.
-/// </summary>
+public sealed record LicenseChangedEvent
+{
+    public required Guid   OrganizationId { get; init; }
+    public required string OldPlan        { get; init; }
+    public required string NewPlan        { get; init; }
+    public required string Message        { get; init; }
+}
+
+public sealed record HeartbeatEvent
+{
+    public DateTime ServerTime       { get; init; } = DateTime.UtcNow;
+    public int      ConnectedClients { get; init; }
+}
+
+// ─── Delad modell ─────────────────────────────────────────────────────────────
+
 public sealed record HubBacklogItem
 {
-    public required Guid   Id          { get; init; }
-    public required string RuleId      { get; init; }
-    public required string Severity    { get; init; }
-    public required string Status      { get; init; }
-    public required string FilePath    { get; init; }
-    public required int    StartLine   { get; init; }
-    public required string Message     { get; init; }
-    public          string? ClassName  { get; init; }
-    public          string? MemberName { get; init; }
-    public          bool IsAutoFixable { get; init; }
-    public          string? Snippet    { get; init; }
-    public          string? Suggestion { get; init; }
+    public required Guid    Id            { get; init; }
+    public required string  RuleId        { get; init; }
+    public required string  Title         { get; init; }
+    public required string  Severity      { get; init; }
+    public required string  Status        { get; init; }
+    public required string  FilePath      { get; init; }
+    public required int     StartLine     { get; init; }
+    public required string  Message       { get; init; }
+    public          string? ClassName     { get; init; }
+    public          string? MemberName    { get; init; }
+    public          string? Namespace     { get; init; }
+    public          bool    IsAutoFixable { get; init; }
+    public          string? Snippet       { get; init; }
+    public          string? Suggestion    { get; init; }
 }

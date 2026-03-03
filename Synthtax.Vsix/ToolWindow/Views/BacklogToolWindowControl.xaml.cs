@@ -1,21 +1,15 @@
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Synthtax.Vsix.ToolWindow.ViewModels;
 
 namespace Synthtax.Vsix.ToolWindow.Views;
 
-/// <summary>
-/// Code-behind för <c>BacklogToolWindowControl.xaml</c>.
-/// All affärslogik hanteras av <see cref="BacklogToolWindowViewModel"/>.
-/// Code-behind innehåller bara UI-specifik "glue" som inte passar i MVVM.
-/// </summary>
 public partial class BacklogToolWindowControl : UserControl
 {
     public BacklogToolWindowControl()
     {
         InitializeComponent();
-
-        // F5 → Refresh
         KeyDown += OnKeyDown;
     }
 
@@ -26,6 +20,18 @@ public partial class BacklogToolWindowControl : UserControl
             if (vm.RefreshCommand.CanExecute(null))
                 _ = vm.RefreshCommand.ExecuteAsync(null);
             e.Handled = true;
+        }
+    }
+
+    // FÖRBÄTTRING #9: Severity-filtret är nu segment-knappar (RadioButton)
+    // istället för en ComboBox. Click-event sätter FilterSeverity på ViewModel.
+    private void SeverityFilter_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (sender is RadioButton rb
+            && rb.Tag is string tag
+            && DataContext is BacklogToolWindowViewModel vm)
+        {
+            vm.FilterSeverity = tag;
         }
     }
 }

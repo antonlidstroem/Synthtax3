@@ -1,119 +1,73 @@
-// ... (behåll befintliga usings)
-using Synthtax.Application.Services; // För IHubPusher och ICurrentUserService
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
+using System.Security.Claims;
 
-namespace Synthtax.Application.Orchestration;
+namespace Synthtax.Backend.Hubs;
 
-public sealed class AnalysisOrchestrator : IAnalysisOrchestrator
+/// <summary>
+/// FÖRBÄTTRING #4+5:
+///   - [Authorize] lagd till — hubben var öppen för alla utan autentisering.
+///   - JoinOrgGroup validerar nu att inkommande token faktiskt tillhör den org
+///     som begärs, annars kan valfri klient prenumerera på vilken organisations
+///     events som helst.
+/// </summary>
+[Authorize]
+public sealed class SynthtaxHub : Hub
 {
-    private readonly SynthtaxDbContext _db;
-    private readonly IPluginRegistry _registry;
-    private readonly IFileScanner _scanner;
-    private readonly SyncEngine _syncEngine;
-    private readonly SyncWriter _syncWriter;
-    private readonly IHubPusher _hubPusher;          // NY: Fas 8
-    private readonly ICurrentUserService _user;     // NY: Fas 8
-    private readonly ILogger<AnalysisOrchestrator> _logger;
+    private readonly ILogger<SynthtaxHub> _logger;
 
-    public AnalysisOrchestrator(
-        SynthtaxDbContext db,
-        IPluginRegistry registry,
-        IFileScanner scanner,
-        SyncEngine syncEngine,
-        SyncWriter syncWriter,
-        IHubPusher hubPusher,                        // NY
-        ICurrentUserService user,                   // NY
-        ILogger<AnalysisOrchestrator> logger)
+    // Kräver att JWT innehåller detta claim (sätts av Synthtax.API.SaaS.JWT)
+    private const string OrgIdClaim = "synthtax:org_id";
+
+    public SynthtaxHub(ILogger<SynthtaxHub> logger)
+        => _logger = logger;
+
+    public async Task JoinOrgGroup(string organizationId)
     {
-        _db = db;
-        _registry = registry;
-        _scanner = scanner;
-        _syncEngine = syncEngine;
-        _syncWriter = syncWriter;
-        _hubPusher = hubPusher;                      // NY
-        _user = user;                               // NY
-        _logger = logger;
-    }
+        // ── Säkerhetsvalidering ───────────────────────────────────────────────
+        var claimedOrgId = Context.User?.FindFirstValue(OrgIdClaim);
 
-    public async Task<OrchestratorResult> RunAsync(OrchestratorRequest request, CancellationToken ct = default)
-    {
-        var totalSw = Stopwatch.StartNew();
-        var errors = new List<string>();
-        var sessionId = Guid.NewGuid();
-
-        // ── FAS A: Skanning & analys (IO-tungt, utanför transaktion) ──
-        var (scannedIssues, scanDuration) = await RunScanPhaseAsync(request, errors, ct);
-
-        // ── FAS B: Transaktionell sync ──
-        OrchestratorResult result;
-        var syncSw = Stopwatch.StartNew();
-
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-        try
+        if (claimedOrgId is null || claimedOrgId != organizationId)
         {
-            // Vi hämtar diffen och skriver till DB
-            result = await RunSyncPhaseAsync(request, sessionId, scannedIssues, errors, scanDuration, ct);
+            _logger.LogWarning(
+                "Anslutning {ConnId} försökte gå med i org:{OrgId} men token säger org:{Claimed}.",
+                Context.ConnectionId, organizationId, claimedOrgId ?? "(saknas)");
 
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            syncSw.Stop();
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
-            _logger.LogError(ex, "Fel i sync-fas — transaktion återrullad.");
-            throw;
+            // Kasta SecurityException — SignalR skickar ett fel till klienten
+            throw new HubException("Otillåtet: du kan bara prenumerera på din egen organisations events.");
         }
 
-        // ── FAS C: Realtidsnotis (Pusha till VSIX efter lyckad commit) ──
-        // Detta är logiken du hade i extension-metoden tidigare
-        await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedPayload
-        {
-            OrganizationId = _user.OrganizationId ?? Guid.Empty,
-            ProjectId = request.ProjectId,
-            SessionId = sessionId,
-            CompletedAt = DateTime.UtcNow,
-            NewIssuesCount = result.NewIssues,
-            ResolvedIssuesCount = result.ResolvedIssues,
-            TotalOpenIssues = result.TotalIssues,
-            HealthScore = result.OverallScore,
-            // Vi kan mappa de 5 senaste för en "snabbvy" i IDE:n
-            NewIssues = result.NewItemsSummary ?? new List<IssueSummary>()
-        });
-
-        return result with { TotalDuration = totalSw.Elapsed };
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"org:{organizationId}");
+        _logger.LogDebug("Anslutning {ConnId} gick med i org:{OrgId}.",
+            Context.ConnectionId, organizationId);
     }
 
-    // ... (RunScanPhaseAsync är oförändrad)
-
-    private async Task<OrchestratorResult> RunSyncPhaseAsync(...)
+    public async Task LeaveOrgGroup(string organizationId)
     {
-        // 1. Ladda befintliga items (använd .AsTracking() då vi ska uppdatera dem)
-        var existingItems = await _db.BacklogItems
-            .Where(bi => bi.ProjectId == request.ProjectId && !bi.IsDeleted)
-            .ToDictionaryAsync(bi => bi.Fingerprint, StringComparer.Ordinal, ct);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"org:{organizationId}");
+        _logger.LogDebug("Anslutning {ConnId} lämnade org:{OrgId}.",
+            Context.ConnectionId, organizationId);
+    }
 
-        // 2. Beräkna diff
-        var diff = _syncEngine.Compute(request.ProjectId, scannedIssues, existingItems);
+    public Task AcknowledgeHeartbeat() => Task.CompletedTask;
 
-        // 3. Skriv diff (här uppdateras AutoClosed och ReopenedInSessionId från Fas 3)
-        // Se till att SyncWriter.WriteAsync returnerar objekten som lagts till/stängts
-        var writeResult = await _syncWriter.WriteAsync(diff, request, sessionId, ct);
+    public override Task OnConnectedAsync()
+    {
+        var orgId = Context.User?.FindFirstValue(OrgIdClaim) ?? "(okänd)";
+        _logger.LogDebug("Klient ansluten: {ConnId}, org={OrgId}.",
+            Context.ConnectionId, orgId);
+        return base.OnConnectedAsync();
+    }
 
-        // 4. Beräkna KPI:er
-        var activeAfterSync = await _db.BacklogItems
-            .Where(bi => bi.ProjectId == request.ProjectId && !bi.IsDeleted && bi.Status == BacklogStatus.Open)
-            .Select(bi => new ActiveIssueSummary(bi.Id, bi.SeverityOverride ?? bi.Rule.DefaultSeverity))
-            .ToListAsync(ct);
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (exception is not null)
+            _logger.LogWarning(exception,
+                "Klient frånkopplad med fel: {ConnId}.", Context.ConnectionId);
+        else
+            _logger.LogDebug("Klient frånkopplad: {ConnId}.", Context.ConnectionId);
 
-        var session = new AnalysisSession { /* ... populera ... */ };
-        KpiCalculator.Populate(session, diff, activeAfterSync);
-        _db.AnalysisSessions.Add(session);
-
-        return new OrchestratorResult
-        {
-            // ... populera ...
-            OverallScore = session.OverallScore,
-            NewItemsSummary = writeResult.AddedItems.Select(i => new IssueSummary(i.Id, i.Title)).ToList()
-        };
+        return base.OnDisconnectedAsync(exception);
     }
 }

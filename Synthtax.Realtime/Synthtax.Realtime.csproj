@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <Folder Include="Contracts\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
+    <ProjectReference Include="..\Synthtax.Shared\Synthtax.Shared.csproj" />
   </ItemGroup>
 
 </Project>

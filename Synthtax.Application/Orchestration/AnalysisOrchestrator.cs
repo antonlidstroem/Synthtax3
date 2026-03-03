@@ -1,120 +1,177 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Synthtax.Core.Contracts;
+using Synthtax.Application.Services;
 using Synthtax.Core.Orchestration;
-using Synthtax.Domain.Entities;
-using Synthtax.Domain.Enums;
-
+using Synthtax.Realtime.Contracts;
 
 namespace Synthtax.Application.Orchestration;
 
 public sealed class AnalysisOrchestrator : IAnalysisOrchestrator
 {
-    private readonly SynthtaxDbContext _db;
-    private readonly IPluginRegistry _registry;
-    private readonly IFileScanner _scanner;
-    private readonly SyncEngine _syncEngine;
-    private readonly SyncWriter _syncWriter;
-    private readonly IHubPusher _hubPusher;
-    private readonly ICurrentUserService _user;
+    private readonly SynthtaxDbContext             _db;
+    private readonly IPluginRegistry               _registry;
+    private readonly IFileScanner                  _scanner;
+    private readonly SyncEngine                    _syncEngine;
+    private readonly SyncWriter                    _syncWriter;
+    private readonly IHubPusher                    _hubPusher;
+    private readonly ICurrentUserService           _user;
     private readonly ILogger<AnalysisOrchestrator> _logger;
 
     public AnalysisOrchestrator(
-        SynthtaxDbContext db,
-        IPluginRegistry registry,
-        IFileScanner scanner,
-        SyncEngine syncEngine,
-        SyncWriter syncWriter,
-        IHubPusher hubPusher,
-        ICurrentUserService user,
+        SynthtaxDbContext             db,
+        IPluginRegistry               registry,
+        IFileScanner                  scanner,
+        SyncEngine                    syncEngine,
+        SyncWriter                    syncWriter,
+        IHubPusher                    hubPusher,
+        ICurrentUserService           user,
         ILogger<AnalysisOrchestrator> logger)
     {
-        _db = db;
-        _registry = registry;
-        _scanner = scanner;
+        _db         = db;
+        _registry   = registry;
+        _scanner    = scanner;
         _syncEngine = syncEngine;
         _syncWriter = syncWriter;
-        _hubPusher = hubPusher;
-        _user = user;
-        _logger = logger;
+        _hubPusher  = hubPusher;
+        _user       = user;
+        _logger     = logger;
     }
 
-    public async Task<OrchestratorResult> RunAsync(OrchestratorRequest request, CancellationToken ct = default)
+    public async Task<OrchestratorResult> RunAsync(
+        OrchestratorRequest request,
+        CancellationToken   ct = default)
     {
-        var totalSw = Stopwatch.StartNew();
-        var errors = new List<string>();
+        var totalSw   = Stopwatch.StartNew();
+        var errors    = new List<string>();
         var sessionId = Guid.NewGuid();
 
-        // FAS A: Skanning (Utanför transaktion)
         var (scannedIssues, scanDuration) = await RunScanPhaseAsync(request, errors, ct);
 
-        // FAS B: Transaktionell Sync
         OrchestratorResult result;
+
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            result = await RunSyncPhaseAsync(request, sessionId, scannedIssues, errors, scanDuration, ct);
+            result = await RunSyncPhaseAsync(
+                request, sessionId, scannedIssues, errors, scanDuration, ct);
+
+            await _db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(CancellationToken.None);
-            _logger.LogError(ex, "Fel vid synkronisering av projekt {ProjectId}", request.ProjectId);
+            _logger.LogError(ex, "Fel i sync-fas — transaktion återrullad.");
             throw;
         }
 
-        // FAS C: SignalR Push (Fas 8)
-        await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedPayload
+        await _hubPusher.PushAnalysisUpdatedAsync(new AnalysisUpdatedEvent
         {
-            OrganizationId = _user.OrganizationId ?? Guid.Empty,
-            ProjectId = request.ProjectId,
-            SessionId = sessionId,
-            CompletedAt = DateTime.UtcNow,
-            NewIssuesCount = result.NewIssues,
-            ResolvedIssuesCount = result.ResolvedIssues,
-            TotalOpenIssues = result.TotalIssues,
-            HealthScore = result.OverallScore
-        });
+            OrganizationId   = _user.OrganizationId ?? Guid.Empty,
+            ProjectId        = request.ProjectId,
+            ProjectName      = request.ProjectName ?? "",
+            SessionId        = sessionId,
+            AnalyzedAt       = DateTime.UtcNow,
+            NewIssueCount    = result.NewIssues,
+            ClosedIssueCount = result.ResolvedIssues,
+            TotalIssues      = result.TotalIssues,
+            HealthScore      = result.OverallScore,
+            Issues           = result.NewItemsSummary,
+            ClosedIssueIds   = result.ClosedIssueIds
+        }, ct);
 
         return result with { TotalDuration = totalSw.Elapsed };
     }
 
-    private async Task<(List<RawIssue> Issues, TimeSpan Duration)> RunScanPhaseAsync(OrchestratorRequest request, List<string> errors, CancellationToken ct)
+    private async Task<(IReadOnlyList<ScannedIssue> Issues, TimeSpan Duration)>
+        RunScanPhaseAsync(
+            OrchestratorRequest request,
+            List<string>        errors,
+            CancellationToken   ct)
     {
-        var sw = Stopwatch.StartNew();
-        // ... (Logik för skanning från din chunk_0)
-        return (new List<RawIssue>(), sw.Elapsed); // Förenklat för exemplet
+        var sw     = Stopwatch.StartNew();
+        var files  = await _scanner.ScanAsync(request.ProjectId, ct);
+        var issues = new List<ScannedIssue>();
+
+        foreach (var plugin in _registry.GetAll())
+        {
+            try
+            {
+                var found = await plugin.AnalyzeAsync(files, ct);
+                issues.AddRange(found);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Plugin {Plugin} misslyckades.", plugin.GetType().Name);
+                errors.Add(ex.Message);
+            }
+        }
+
+        return (issues, sw.Elapsed);
     }
 
-    private async Task<OrchestratorResult> RunSyncPhaseAsync(OrchestratorRequest request, Guid sessionId, List<RawIssue> scannedIssues, List<string> errors, TimeSpan scanDuration, CancellationToken ct)
+    private async Task<OrchestratorResult> RunSyncPhaseAsync(
+        OrchestratorRequest         request,
+        Guid                        sessionId,
+        IReadOnlyList<ScannedIssue> scannedIssues,
+        List<string>                errors,
+        TimeSpan                    scanDuration,
+        CancellationToken           ct)
     {
         var existingItems = await _db.BacklogItems
             .Where(bi => bi.ProjectId == request.ProjectId && !bi.IsDeleted)
             .ToDictionaryAsync(bi => bi.Fingerprint, StringComparer.Ordinal, ct);
 
-        var diff = _syncEngine.Compute(request.ProjectId, scannedIssues, existingItems);
+        var diff        = _syncEngine.Compute(request.ProjectId, scannedIssues, existingItems);
         var writeResult = await _syncWriter.WriteAsync(diff, request, sessionId, ct);
+
+        var activeAfterSync = await _db.BacklogItems
+            .Where(bi => bi.ProjectId == request.ProjectId
+                      && !bi.IsDeleted
+                      && bi.Status   == BacklogStatus.Open)
+            .Select(bi => new ActiveIssueSummary(
+                bi.Id,
+                bi.SeverityOverride ?? bi.Rule.DefaultSeverity))
+            .ToListAsync(ct);
 
         var session = new AnalysisSession
         {
-            Id = sessionId,
-            ProjectId = request.ProjectId,
-            Timestamp = DateTime.UtcNow
+            Id           = sessionId,
+            ProjectId    = request.ProjectId,
+            ScanDuration = scanDuration,
+            Errors       = errors
         };
 
-        // Spara sessionen
+        KpiCalculator.Populate(session, diff, activeAfterSync);
         _db.AnalysisSessions.Add(session);
-        await _db.SaveChangesAsync(ct);
 
         return new OrchestratorResult
         {
-            SessionId = sessionId,
-            ProjectId = request.ProjectId,
-            Success = errors.Count == 0,
-            NewIssues = diff.NewCount,
-            ResolvedIssues = diff.AutoCloseCount,
-            TotalIssues = existingItems.Count + diff.NewCount - diff.AutoCloseCount
+            OverallScore    = session.OverallScore,
+            NewIssues       = writeResult.AddedCount,
+            ResolvedIssues  = writeResult.RemovedCount,
+            TotalIssues     = activeAfterSync.Count,
+            ClosedIssueIds  = writeResult.RemovedItems.Select(i => i.Id).ToList(),
+            NewItemsSummary = writeResult.AddedItems
+                .Select(i => new HubBacklogItem
+                {
+                    Id            = i.Id,
+                    Title         = i.Title,
+                    RuleId        = i.RuleId,
+                    Severity      = i.Severity,
+                    Status        = BacklogStatus.Open.ToString(),
+                    FilePath      = i.FilePath,
+                    StartLine     = i.StartLine,
+                    Message       = i.Message,
+                    ClassName     = i.ClassName,
+                    MemberName    = i.MemberName,
+                    Namespace     = i.Namespace,
+                    IsAutoFixable = i.IsAutoFixable,
+                    Snippet       = i.Snippet,
+                    Suggestion    = i.Suggestion
+                })
+                .ToList()
         };
     }
 }
