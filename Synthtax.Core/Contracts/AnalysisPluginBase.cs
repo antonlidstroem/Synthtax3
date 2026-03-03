@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Normalization;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Core.Contracts;
 
@@ -115,7 +116,7 @@ public abstract class AnalysisPluginBase : IAnalysisPlugin
         int         startLine,
         string      snippet,
         string      message,
-        Synthtax.Core.Enums.Severity severity,
+        Severity severity,
         string      category,
         string?     suggestion      = null,
         bool        isAutoFixable   = false,
@@ -185,7 +186,8 @@ public sealed record PluginRuleDescriptor : IPluginRule
     public required string  Name            { get; init; }
     public required string  Description     { get; init; }
     public required string  Category        { get; init; }
-    public Synthtax.Core.Enums.Severity DefaultSeverity { get; init; } = Synthtax.Core.Enums.Severity.Medium;
+    public Severity DefaultSeverity { get; init; } = Severity.Medium;
     public bool             IsEnabled        { get; init; } = true;
     public Uri?             DocumentationUri { get; init; }
+
 }

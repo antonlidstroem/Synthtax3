@@ -1,25 +1,25 @@
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Build.Locator;
+using Synthtax.API;
 using Synthtax.API.Extensions;
+using Synthtax.API.Middleware;
 using Synthtax.Application.Extensions;
 using Synthtax.Core.Extensions;
 using Synthtax.Infrastructure;
 using Synthtax.Infrastructure.Data;
-
 
 if (!MSBuildLocator.IsRegistered)
     MSBuildLocator.RegisterDefaults();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Registrera tjänster (DI)
+// ── 1. Tjänster ───────────────────────────────────────────────────────────────
+
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers().AddNewtonsoftJson();
 
-// Infrastruktur & SaaS (Fas 5)
-builder.Services.AddSynthtaxInfrastructure(builder.Configuration); // Innehåller DB & Repos
-builder.Services.AddSaasInfrastructure(builder.Configuration);     // Innehåller SaaS-specifikt
-builder.Services.AddSaasAuthentication(builder.Configuration);     // JWT & Policies
+// Infrastruktur (DB, repos, JWT-auth)
+builder.Services.AddSynthtaxInfrastructure(builder.Configuration);
 
 // Analys & Plugins
 builder.Services.AddApiServices(builder.Configuration);
@@ -27,23 +27,44 @@ builder.Services.AddAnalysisServices();
 builder.Services.AddPluginCore();
 builder.Services.AddOrchestrator();
 builder.Services.AddFuzzyMatching();
-builder.Services.AddSynthtaxSignalR(builder.Configuration);
+
+// SignalR (inbyggt i ASP.NET Core 9 — ingen extra NuGet-paket behövs)
+builder.Services.AddSignalR();
+
+// Super Admin / Watchdog (Fas 9)
+builder.Services.AddSuperAdmin(builder.Configuration);
+
+// Audit-loggning via bakgrundstjänst
+builder.Services.AddAuditWriter();
 
 // Rate Limiting
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddFixedWindowLimiter("analysis", o => { o.PermitLimit = 5; o.Window = TimeSpan.FromMinutes(1); });
-    options.AddFixedWindowLimiter("auth", o => { o.PermitLimit = 10; o.Window = TimeSpan.FromMinutes(1); });
+    options.AddFixedWindowLimiter("analysis", o =>
+    {
+        o.PermitLimit = 5;
+        o.Window      = TimeSpan.FromMinutes(1);
+    });
+    options.AddFixedWindowLimiter("auth", o =>
+    {
+        o.PermitLimit = 10;
+        o.Window      = TimeSpan.FromMinutes(1);
+    });
 });
 
 var app = builder.Build();
 
-// 2. Configure Pipeline (Middleware)
+// ── 2. Middleware-pipeline ────────────────────────────────────────────────────
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1"); c.RoutePrefix = string.Empty; });
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Synthtax API v1");
+        c.RoutePrefix = string.Empty;
+    });
     app.UseDeveloperExceptionPage();
 }
 else
@@ -52,26 +73,29 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseExceptionHandler(); // Använder AddProblemDetails automatiskt i .NET 8+
-
+app.UseExceptionHandler();
 app.UseRouting();
-app.UseCors("SynthtaxPolicy"); // Använder policyn definierad i AddApiServices
+app.UseCors("SynthtaxPolicy");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseTenantContext();        // Fas 5: Måste ligga efter Auth
+app.UseAuditLogging();
 
-// Seedning & Init
+// ── 3. Seedning & Init ────────────────────────────────────────────────────────
+
 await CacheDbInitializer.InitializeAsync(app.Services);
 await DbSeeder.SeedAsync(app.Services);
 
-// Endpoints
+// ── 4. Endpoints ──────────────────────────────────────────────────────────────
+
 app.MapControllers();
-app.MapSynthtaxHubs();
+app.MapSuperAdminEndpoints();
+
 app.MapGet("/health", () => Results.Ok(new
 {
-    Status = "Healthy",
-    Version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "1.0.0"
+    Status  = "Healthy",
+    Version = System.Reflection.Assembly.GetEntryAssembly()
+                    ?.GetName().Version?.ToString() ?? "1.0.0"
 })).AllowAnonymous();
 
 app.Run();

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Synthtax.API.Services;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Interfaces;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.API.Controllers;
 
@@ -151,10 +152,10 @@ public class WebAnalysisController : SynthtaxControllerBase
             filtered.FilesAnalyzed  = filtered.FileResults.Count;
             filtered.TotalIssues    = filtered.FileResults.Sum(r => r.IssueCount);
             var all = filtered.FileResults.SelectMany(r => r.Issues).ToList();
-            filtered.CriticalCount  = all.Count(i => i.Severity == Core.Enums.Severity.Critical);
-            filtered.HighCount      = all.Count(i => i.Severity == Core.Enums.Severity.High);
-            filtered.MediumCount    = all.Count(i => i.Severity == Core.Enums.Severity.Medium);
-            filtered.LowCount       = all.Count(i => i.Severity == Core.Enums.Severity.Low);
+            filtered.CriticalCount  = all.Count(i => i.Severity == Severity.Critical);
+            filtered.HighCount      = all.Count(i => i.Severity == Severity.High);
+            filtered.MediumCount    = all.Count(i => i.Severity == Severity.Medium);
+            filtered.LowCount       = all.Count(i => i.Severity == Severity.Low);
             if (all.Any()) filtered.ByLanguage[language] = all;
             return Ok(filtered);
         }

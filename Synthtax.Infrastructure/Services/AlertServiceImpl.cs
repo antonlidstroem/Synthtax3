@@ -2,19 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Synthtax.Application.SuperAdmin.DTOs;
 using Synthtax.Application.Watchdog;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Data;
 
 namespace Synthtax.Infrastructure.Services;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Kontrakt (komplettering av befintlig partial-deklaration i AlertService.cs)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Fullständigt gränssnitt för IAlertService — kompletterar den befintliga
-/// deklarationen i <c>AlertService.cs</c> med alla metoder som controllers behöver.
-/// </summary>
 public interface IAlertService
 {
     Task<AlertListResponse> ListAlertsAsync(
@@ -25,36 +17,21 @@ public interface IAlertService
     Task<AlertSummaryDto>  GetSummaryAsync(CancellationToken ct = default);
     Task<WatchdogAlert?>   GetByIdAsync(Guid id, CancellationToken ct = default);
 
-    Task<WatchdogAlert?>   UpdateStatusAsync(
+    Task<WatchdogAlert?> UpdateStatusAsync(
         Guid id, string newStatus, string? comment,
         string updatedBy, CancellationToken ct = default);
 
-    Task<bool>             CreateFromFindingAsync(
-        WatchdogFinding finding, CancellationToken ct = default);
+    Task<bool> CreateFromFindingAsync(WatchdogFinding finding, CancellationToken ct = default);
 
-    Task<int>              BulkDismissInfoAlertsAsync(
-        int olderThanDays, string by, CancellationToken ct = default);
-
-    Task<int>              CountNewAlertsAsync(
-        WatchdogSource source, int hours, CancellationToken ct = default);
-
-    Task<int>              CountCriticalNewAsync(CancellationToken ct = default);
+    Task<int> BulkDismissInfoAlertsAsync(int olderThanDays, string by, CancellationToken ct = default);
+    Task<int> CountNewAlertsAsync(WatchdogSource source, int hours, CancellationToken ct = default);
+    Task<int> CountCriticalNewAsync(CancellationToken ct = default);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AlertServiceImpl  — komplett implementation
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Implementation av <see cref="IAlertService"/>.
-///
-/// <para>Registreras som Scoped. Kör på <c>IgnoreQueryFilters()</c> eftersom
-/// watchdog-alerts inte är tenant-isolerade — de tillhör hela plattformen.</para>
-/// </summary>
 public sealed class AlertServiceImpl : IAlertService
 {
-    private readonly SynthtaxDbContext        _db;
-    private readonly IAdminAlertPublisher     _publisher;
+    private readonly SynthtaxDbContext         _db;
+    private readonly IAdminAlertPublisher      _publisher;
     private readonly ILogger<AlertServiceImpl> _logger;
 
     public AlertServiceImpl(
@@ -66,8 +43,6 @@ public sealed class AlertServiceImpl : IAlertService
         _publisher = publisher;
         _logger    = logger;
     }
-
-    // ── Läsa ──────────────────────────────────────────────────────────────
 
     public async Task<AlertListResponse> ListAlertsAsync(
         int page, int pageSize,
@@ -90,8 +65,8 @@ public sealed class AlertServiceImpl : IAlertService
             Enum.TryParse<WatchdogSource>(sourceFilter, ignoreCase: true, out var src))
             query = query.Where(a => a.Source == src);
 
-        var total     = await query.CountAsync(ct);
-        var newCount  = await query.CountAsync(a => a.Status == AlertStatus.New, ct);
+        var total    = await query.CountAsync(ct);
+        var newCount = await query.CountAsync(a => a.Status == AlertStatus.New, ct);
         var critCount = await query.CountAsync(
             a => a.Severity == AlertSeverity.Critical && a.Status == AlertStatus.New, ct);
 
@@ -113,7 +88,6 @@ public sealed class AlertServiceImpl : IAlertService
     public async Task<AlertSummaryDto> GetSummaryAsync(CancellationToken ct = default)
     {
         var query = _db.WatchdogAlerts.IgnoreQueryFilters().AsNoTracking();
-
         return new AlertSummaryDto
         {
             NewCount      = await query.CountAsync(a => a.Status == AlertStatus.New, ct),
@@ -132,16 +106,13 @@ public sealed class AlertServiceImpl : IAlertService
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == id, ct);
 
-    // ── Skriva ────────────────────────────────────────────────────────────
-
     public async Task<bool> CreateFromFindingAsync(
         WatchdogFinding finding, CancellationToken ct = default)
     {
-        // Idempotens: skapa inte om nyckeln redan finns
         var exists = await _db.WatchdogAlerts
             .IgnoreQueryFilters()
-            .AnyAsync(a => a.Source == finding.Source
-                        && a.ExternalVersionKey == finding.ExternalVersionKey, ct);
+            .AnyAsync(a => a.Source              == finding.Source
+                        && a.ExternalVersionKey  == finding.ExternalVersionKey, ct);
 
         if (exists)
         {
@@ -153,17 +124,17 @@ public sealed class AlertServiceImpl : IAlertService
 
         var alert = new WatchdogAlert
         {
-            Id                   = Guid.NewGuid(),
-            Source               = finding.Source,
-            Severity             = finding.Severity,
-            Status               = AlertStatus.New,
-            ExternalVersionKey   = finding.ExternalVersionKey,
-            Title                = finding.Title,
-            Description          = finding.Description,
-            ReleaseNotesUrl      = finding.ReleaseNotesUrl,
-            ActionRequired       = finding.ActionRequired,
-            ExternalPublishedAt  = finding.ExternalPublishedAt,
-            RawPayloadJson       = finding.RawPayloadJson
+            Id                  = Guid.NewGuid(),
+            Source              = finding.Source,
+            Severity            = finding.Severity,
+            Status              = AlertStatus.New,
+            ExternalVersionKey  = finding.ExternalVersionKey,
+            Title               = finding.Title,
+            Description         = finding.Description,
+            ReleaseNotesUrl     = finding.ReleaseNotesUrl,
+            ActionRequired      = finding.ActionRequired,
+            ExternalPublishedAt = finding.ExternalPublishedAt,
+            RawPayloadJson      = finding.RawPayloadJson
         };
 
         _db.WatchdogAlerts.Add(alert);
@@ -173,9 +144,7 @@ public sealed class AlertServiceImpl : IAlertService
             "WatchdogAlert created: [{Sev}] {Title} ({Key})",
             finding.Severity, finding.Title, finding.ExternalVersionKey);
 
-        // Push till admin-dashboarden via SignalR
         await _publisher.PublishNewAlertAsync(alert, ct);
-
         return true;
     }
 
@@ -193,7 +162,6 @@ public sealed class AlertServiceImpl : IAlertService
         if (alert is null) return null;
 
         alert.Status = newStatus;
-
         switch (newStatus)
         {
             case AlertStatus.Acknowledged:
@@ -207,10 +175,7 @@ public sealed class AlertServiceImpl : IAlertService
         }
 
         await _db.SaveChangesAsync(ct);
-
-        _logger.LogInformation(
-            "Alert {Id} status → {Status} by {By}", id, newStatus, updatedBy);
-
+        _logger.LogInformation("Alert {Id} status → {Status} by {By}", id, newStatus, updatedBy);
         return alert;
     }
 
@@ -253,8 +218,6 @@ public sealed class AlertServiceImpl : IAlertService
             .CountAsync(a => a.Severity == AlertSeverity.Critical
                           && a.Status   == AlertStatus.New, ct);
 
-    // ── Mappning ──────────────────────────────────────────────────────────
-
     private static AlertDto MapToDto(WatchdogAlert a) => new()
     {
         Id                  = a.Id,
@@ -271,61 +234,4 @@ public sealed class AlertServiceImpl : IAlertService
         AcknowledgedBy      = a.AcknowledgedBy,
         AcknowledgedAt      = a.AcknowledgedAt
     };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// EF DbContext-tillägg (partial-klass-mönster)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Fas 9-tillägg till SynthtaxDbContext.
-/// Lägg till dessa DbSet-properties och OnModelCreating-konfigurationer
-/// i befintlig SynthtaxDbContext.cs.
-///
-/// <code>
-/// // DbSets (lägg till i SynthtaxDbContext):
-/// public DbSet&lt;WatchdogAlert&gt;   WatchdogAlerts   { get; set; }
-/// public DbSet&lt;PluginTelemetry&gt; PluginTelemetry  { get; set; }
-/// public DbSet&lt;WatchdogRun&gt;     WatchdogRuns     { get; set; }
-/// </code>
-/// </summary>
-internal static class Fas9DbContextGuide
-{
-    /// <summary>
-    /// Konfiguration att lägga till i OnModelCreating(ModelBuilder mb):
-    ///
-    /// <code>
-    /// // WatchdogAlert
-    /// mb.Entity&lt;WatchdogAlert&gt;(b => {
-    ///     b.HasIndex(a => new { a.Source, a.ExternalVersionKey }).IsUnique();
-    ///     b.HasIndex(a => a.Status);
-    ///     b.HasIndex(a => a.CreatedAt);
-    ///     b.Property(a => a.Source).HasConversion&lt;int&gt;();
-    ///     b.Property(a => a.Severity).HasConversion&lt;int&gt;();
-    ///     b.Property(a => a.Status).HasConversion&lt;int&gt;();
-    ///     b.Property(a => a.Description).HasMaxLength(4000);
-    ///     b.Property(a => a.Title).HasMaxLength(500);
-    ///     b.Property(a => a.ExternalVersionKey).HasMaxLength(200);
-    /// });
-    ///
-    /// // PluginTelemetry
-    /// mb.Entity&lt;PluginTelemetry&gt;(b => {
-    ///     b.HasIndex(a => a.InstallationId);
-    ///     b.HasIndex(a => a.PeriodEnd);
-    ///     b.HasIndex(a => a.PluginVersion);
-    ///     b.HasIndex(a => a.VsVersionBucket);
-    ///     b.Property(a => a.PluginVersion).HasMaxLength(20);
-    ///     b.Property(a => a.VsVersionBucket).HasMaxLength(10);
-    ///     b.Property(a => a.OsPlatform).HasMaxLength(50);
-    /// });
-    ///
-    /// // WatchdogRun
-    /// mb.Entity&lt;WatchdogRun&gt;(b => {
-    ///     b.HasIndex(r => new { r.Source, r.RanAt });
-    ///     b.Property(r => r.Source).HasConversion&lt;int&gt;();
-    ///     b.Property(r => r.ErrorMessage).HasMaxLength(1000);
-    /// });
-    /// </code>
-    /// </summary>
-    internal static void ModelBuilderGuide() { }
 }

@@ -1,275 +1,119 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Enums;
 
 namespace Synthtax.Analysis.Rules;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CA008 — Method Extraction (Complex Methods)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Identifierar metoder som bör delas upp i mindre enheter genom att
-/// kombinera tre komplexitetsmått:
-///
-/// <list type="bullet">
-///   <item><b>Cyklomatisk komplexitet:</b> antal oberoende kodvägar (if, for, while, catch, &&, ||, ??)</item>
-///   <item><b>Kognitiv komplexitet:</b> hur svår koden är att förstå för en människa (nästling bestraffas)</item>
-///   <item><b>Radräkning:</b> metodens totala längd i källkod</item>
-/// </list>
-///
-/// <para><b>Tröskel-kriterier (flagga om MINST TVÅ uppfylls):</b>
-/// <list type="table">
-///   <listheader><term>Mått</term><term>Varning</term><term>Kritisk</term></listheader>
-///   <item><term>Cyklomatisk</term><term>≥ 8</term><term>≥ 15</term></item>
-///   <item><term>Kognitiv</term>   <term>≥ 10</term><term>≥ 20</term></item>
-///   <item><term>Rader</term>      <term>≥ 40</term><term>≥ 80</term></item>
-/// </list>
-/// </para>
-/// </summary>
-internal sealed class MethodExtractionRule
+public sealed class MethodExtractionRule : ISynthtaxRule
 {
-    internal const string RuleId = "CA008";
+    public static string RuleId => "SA003";
+    string ISynthtaxRule.RuleId => RuleId;
 
-    // Tröskelkonstanter (justerbara via config)
-    private const int CyclomaticWarn     = 8;
-    private const int CyclomaticCritical = 15;
-    private const int CognitiveWarn      = 10;
-    private const int CognitiveCritical  = 20;
-    private const int LineCountWarn      = 40;
-    private const int LineCountCritical  = 80;
-    private const int ReturnCountWarn    = 4;
+    private const int MaxLines      = 30;
+    private const int MaxComplexity = 10;
+    private const int MaxNesting    = 4;
 
-    internal static IEnumerable<RawIssue> Analyze(
-        SyntaxNode root,
-        string     filePath,
-        CancellationToken ct)
+    // ── Interface implementation ──────────────────────────────────────────
+    public IEnumerable<RawIssue> Analyze(
+        SyntaxNode root, SemanticModel? model, string filePath, CancellationToken ct)
+        => AnalyzeCore(root, filePath, ct);
+
+    // ── Overload used by tests and CSharpStructuralPlugin ─────────────────
+    public IEnumerable<RawIssue> Analyze(
+        SyntaxTree tree, string filePath, IReadOnlySet<string>? enabledRuleIds = null)
+    {
+        if (enabledRuleIds is not null && !enabledRuleIds.Contains(RuleId))
+            return [];
+        return AnalyzeCore(tree.GetRoot(), filePath, CancellationToken.None);
+    }
+
+    // ── Static overload used by ArchitecturalRefactoringPlugin ────────────
+    public static IEnumerable<RawIssue> Analyze(
+        SyntaxNode root, string filePath, CancellationToken ct)
+        => new MethodExtractionRule().AnalyzeCore(root, filePath, ct);
+
+    // ── Core logic ────────────────────────────────────────────────────────
+    private IEnumerable<RawIssue> AnalyzeCore(
+        SyntaxNode root, string filePath, CancellationToken ct)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             ct.ThrowIfCancellationRequested();
+            if (method.Body == null && method.ExpressionBody == null) continue;
 
-            // Hoppa över abstrakta/interface-metoder (ingen kropp)
-            if (method.Body is null && method.ExpressionBody is null) continue;
+            // Skip generated methods
+            if (method.AttributeLists.Any(al => al.Attributes.Any(a =>
+                a.Name.ToString().Contains("GeneratedCode")))) continue;
 
-            // Hoppa över trivellt korta metoder
-            var lineSpan  = method.GetLocation().GetLineSpan();
-            var lineCount = lineSpan.EndLinePosition.Line - lineSpan.StartLinePosition.Line + 1;
-            if (lineCount < 10) continue;
+            var lines      = method.ToString().Split('\n').Length;
+            var complexity = ComputeComplexity(method);
+            var nesting    = ComputeMaxNesting(method);
 
-            var cyclomatic = ComputeCyclomatic(method);
-            var cognitive  = ComputeCognitive(method);
-            var returns    = CountReturnStatements(method);
+            if (lines <= MaxLines && complexity <= MaxComplexity && nesting <= MaxNesting) continue;
 
-            // Bedöm hur många kriterier som är uppfyllda
-            int warnings  = CountWarnings(cyclomatic, cognitive, lineCount, returns);
-            int criticals = CountCriticals(cyclomatic, cognitive, lineCount);
+            var lineSpan = method.GetLocation().GetLineSpan();
+            var cls      = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+            var ns       = method.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+            var name     = method.Identifier.Text;
 
-            if (warnings < 2 && criticals < 1) continue;
-
-            var severity = criticals >= 2 ? Severity.High
-                         : criticals >= 1 ? Severity.Medium
-                         :                  Severity.Low;
-
-            // Bygg scope
-            var classNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-            var nsNode    = method.Ancestors()
-                .Where(n => n is NamespaceDeclarationSyntax or FileScopedNamespaceDeclarationSyntax)
-                .FirstOrDefault();
-
-            var ns = nsNode switch
-            {
-                NamespaceDeclarationSyntax n          => n.Name.ToString(),
-                FileScopedNamespaceDeclarationSyntax n => n.Name.ToString(),
-                _                                     => null
-            };
-
-            var scope = LogicalScope.ForMethod(
-                ns, classNode?.Identifier.Text, method.Identifier.Text);
-
-            var snippet   = BuildComplexitySnapshot(method, lineCount);
-            var breakdown = BuildBreakdown(cyclomatic, cognitive, lineCount, returns);
+            var reasons = new List<string>();
+            if (lines      > MaxLines)      reasons.Add($"{lines} lines");
+            if (complexity > MaxComplexity) reasons.Add($"complexity {complexity}");
+            if (nesting    > MaxNesting)    reasons.Add($"nesting depth {nesting}");
 
             yield return new RawIssue
             {
                 RuleId     = RuleId,
-                Scope      = scope,
                 FilePath   = filePath,
                 StartLine  = lineSpan.StartLinePosition.Line + 1,
-                EndLine    = lineSpan.EndLinePosition.Line + 1,
-                Snippet    = snippet,
-                Message    = $"Metoden `{method.Identifier.Text}` är komplex: {breakdown}.",
-                Suggestion = "Identifiera distinkta logiska faser och extrahera dem till " +
-                             "privata hjälpmetoder med beskrivande namn. " +
-                             "Publika API förblir oförändrat.",
-                Severity   = severity,
+                EndLine    = lineSpan.EndLinePosition.Line   + 1,
+                Severity   = lines > MaxLines * 2 ? Severity.High : Severity.Medium,
+                Message    = $"Method '{name}' is too complex ({string.Join(", ", reasons)}).",
                 Category   = "Maintainability",
-                Metadata   = new Dictionary<string, string>
+                Snippet    = method.ToString().Split('\n').First().Trim(),
+                Suggestion = $"Extract sub-responsibilities from '{name}' into smaller private methods.",
+                Scope      = new LogicalScope
                 {
-                    ["complexity"]    = cognitive.ToString(),
-                    ["cyclomatic"]    = cyclomatic.ToString(),
-                    ["line_count"]    = lineCount.ToString(),
-                    ["return_count"]  = returns.ToString(),
-                    ["max_complexity"] = CyclomaticWarn.ToString()
+                    Namespace  = ns?.Name.ToString(),
+                    ClassName  = cls?.Identifier.Text,
+                    MemberName = name,
+                    Kind       = ScopeKind.Method
                 }
             };
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // Komplexitetsmätare
-    // ═══════════════════════════════════════════════════════════════════════
+    private static int ComputeComplexity(MethodDeclarationSyntax method) =>
+        method.DescendantNodes().Count(n => n is
+            IfStatementSyntax or
+            ForStatementSyntax or
+            ForEachStatementSyntax or
+            WhileStatementSyntax or
+            CatchClauseSyntax or
+            SwitchSectionSyntax or
+            ConditionalExpressionSyntax) + 1;
 
-    /// <summary>
-    /// Cyklomatisk komplexitet = antal beslutsvägar + 1.
-    /// Räknar: if, else if, for, foreach, while, do, case, catch, && (i conditions), ||, ??
-    /// </summary>
-    private static int ComputeCyclomatic(MethodDeclarationSyntax method)
+    private static int ComputeMaxNesting(MethodDeclarationSyntax method)
     {
-        int count = 1; // Grundkomplexitet
-
-        foreach (var node in method.DescendantNodes())
+        int max = 0;
+        void Walk(SyntaxNode node, int depth)
         {
-            count += node switch
-            {
-                IfStatementSyntax           => 1,
-                ElseClauseSyntax e when e.Statement is not IfStatementSyntax => 0,
-                ForStatementSyntax          => 1,
-                ForEachStatementSyntax      => 1,
-                WhileStatementSyntax        => 1,
-                DoStatementSyntax           => 1,
-                CatchClauseSyntax           => 1,
-                SwitchSectionSyntax         => 1,
-                SwitchExpressionArmSyntax   => 1,
-                ConditionalExpressionSyntax => 1,  // ternary
-                BinaryExpressionSyntax b when
-                    b.IsKind(SyntaxKind.LogicalAndExpression) ||
-                    b.IsKind(SyntaxKind.LogicalOrExpression)  => 1,
-                BinaryExpressionSyntax b when
-                    b.IsKind(SyntaxKind.CoalesceExpression)   => 1,
-                _ => 0
-            };
-        }
-        return count;
-    }
-
-    /// <summary>
-    /// Kognitiv komplexitet (förenklad variant av Sonar-algoritmen):
-    /// Incrementerar baserat på nästlingsnivå — djupt nästlad logik är svårare att förstå.
-    /// </summary>
-    private static int ComputeCognitive(MethodDeclarationSyntax method)
-    {
-        int total = 0;
-
-        void Walk(SyntaxNode node, int nesting)
-        {
-            int increment = 0;
-            int childNesting = nesting;
-
-            switch (node)
-            {
-                case IfStatementSyntax:
-                case ForStatementSyntax:
-                case ForEachStatementSyntax:
-                case WhileStatementSyntax:
-                case DoStatementSyntax:
-                    increment    = 1 + nesting;
-                    childNesting = nesting + 1;
-                    break;
-
-                case ElseClauseSyntax e when e.Statement is IfStatementSyntax:
-                    increment    = 1;  // else-if: inget extra nesting-straff
-                    childNesting = nesting;
-                    break;
-
-                case ElseClauseSyntax:
-                    increment    = 1;
-                    childNesting = nesting + 1;
-                    break;
-
-                case CatchClauseSyntax:
-                    increment    = 1 + nesting;
-                    childNesting = nesting + 1;
-                    break;
-
-                case SwitchStatementSyntax:
-                case SwitchExpressionSyntax:
-                    increment    = 1 + nesting;
-                    childNesting = nesting + 1;
-                    break;
-
-                case ConditionalExpressionSyntax:
-                    increment    = 1 + nesting;
-                    childNesting = nesting + 1;
-                    break;
-
-                case BinaryExpressionSyntax b when
-                    b.IsKind(SyntaxKind.LogicalAndExpression) ||
-                    b.IsKind(SyntaxKind.LogicalOrExpression):
-                    increment = 1;
-                    break;
-
-                case LocalFunctionStatementSyntax:
-                case ParenthesizedLambdaExpressionSyntax:
-                case SimpleLambdaExpressionSyntax:
-                    increment    = 1;
-                    childNesting = nesting + 1;
-                    break;
-            }
-
-            total += increment;
+            if (depth > max) max = depth;
             foreach (var child in node.ChildNodes())
-                Walk(child, childNesting);
+            {
+                int next = child is IfStatementSyntax or ForStatementSyntax or
+                           ForEachStatementSyntax or WhileStatementSyntax or
+                           DoStatementSyntax or TryStatementSyntax
+                    ? depth + 1
+                    : depth;
+                Walk(child, next);
+            }
         }
-
-        if (method.Body      is not null) Walk(method.Body, 0);
-        if (method.ExpressionBody is not null) Walk(method.ExpressionBody, 0);
-        return total;
-    }
-
-    private static int CountReturnStatements(MethodDeclarationSyntax method) =>
-        method.DescendantNodes().OfType<ReturnStatementSyntax>().Count();
-
-    // ── Bedömningshjälpare ────────────────────────────────────────────────
-
-    private static int CountWarnings(int cyclo, int cog, int lines, int returns) =>
-        (cyclo  >= CyclomaticWarn  ? 1 : 0)  +
-        (cog    >= CognitiveWarn   ? 1 : 0)  +
-        (lines  >= LineCountWarn   ? 1 : 0)  +
-        (returns >= ReturnCountWarn ? 1 : 0);
-
-    private static int CountCriticals(int cyclo, int cog, int lines) =>
-        (cyclo >= CyclomaticCritical ? 1 : 0) +
-        (cog   >= CognitiveCritical  ? 1 : 0) +
-        (lines >= LineCountCritical  ? 1 : 0);
-
-    private static string BuildBreakdown(int cyclo, int cog, int lines, int returns) =>
-        $"cyklomatisk={cyclo}" +
-        (cyclo >= CyclomaticCritical ? "🔴" : cyclo >= CyclomaticWarn ? "🟠" : "") +
-        $", kognitiv={cog}" +
-        (cog >= CognitiveCritical ? "🔴" : cog >= CognitiveWarn ? "🟠" : "") +
-        $", rader={lines}" +
-        (lines >= LineCountCritical ? "🔴" : lines >= LineCountWarn ? "🟠" : "") +
-        $", returer={returns}";
-
-    /// <summary>Bygger ett kodfragment som visar metodens signatur och första/sista rader.</summary>
-    private static string BuildComplexitySnapshot(MethodDeclarationSyntax method, int lineCount)
-    {
-        var sig  = $"{string.Join(" ", method.Modifiers.Select(m => m.Text))} " +
-                   $"{method.ReturnType} {method.Identifier.Text}{method.TypeParameterList}{method.ParameterList}";
-
-        if (method.Body is null) return sig;
-
-        var stmts = method.Body.Statements;
-        if (stmts.Count == 0) return sig + " { }";
-
-        // Visa signatur + första 3 + "..." + sista 2 satser
-        var first = stmts.Take(3).Select(s => "    " + s.ToString().Split('\n')[0].Trim());
-        var more  = stmts.Count > 5 ? [$"    // ... ({stmts.Count - 5} statements)"] : [];
-        var last  = stmts.Count > 5 ? stmts.TakeLast(2).Select(s => "    " + s.ToString().Split('\n')[0].Trim()) : [];
-
-        return sig + "\n{\n" + string.Join("\n", first.Concat(more).Concat(last)) + "\n}";
+        Walk(method, 0);
+        return max;
     }
 }
+
+/// <summary>Alias used by CSharpStructuralPlugin and tests.</summary>
+public sealed class ComplexMethodRule : MethodExtractionRule { }

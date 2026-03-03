@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Synthtax.Application.SuperAdmin.DTOs;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Application.Watchdog;
 

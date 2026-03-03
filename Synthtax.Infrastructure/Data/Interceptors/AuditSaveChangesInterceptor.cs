@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Services;
 
 namespace Synthtax.Infrastructure.Data.Interceptors;

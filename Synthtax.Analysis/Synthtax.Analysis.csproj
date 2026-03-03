@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Synthtax.Analysis</RootNamespace>
     <AssemblyName>Synthtax.Analysis</AssemblyName>
-    <Description>Synthtax code analysis engine. Pure class library – no ASP.NET, no EF Core, no infrastructure dependencies. Can be referenced by desktop clients (WPF) for local analysis or by the API for server-side analysis.</Description>
+    <Description>Synthtax code analysis engine. Pure class library – no ASP.NET, no EF Core, no infrastructure dependencies.</Description>
     <Version>1.0.0</Version>
   </PropertyGroup>
 
@@ -20,12 +20,13 @@
     <!-- Git -->
     <PackageReference Include="LibGit2Sharp" Version="0.30.0" />
 
-	  <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
-	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <!-- Must match Synthtax.Core versions exactly to avoid NU1605 downgrade error -->
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- DTOs, enums and shared interfaces live in Core -->
     <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
   </ItemGroup>
 

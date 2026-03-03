@@ -4,7 +4,7 @@ using Synthtax.Core.Contracts;
 using Synthtax.Core.Fingerprinting;
 using Synthtax.Core.FuzzyMatching;
 using Synthtax.Core.Orchestration;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Application.Orchestration;
 

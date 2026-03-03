@@ -1,4 +1,5 @@
 using Synthtax.Core.DTOs;
+
 using Synthtax.Core.Enums;
 
 namespace Synthtax.Core.Interfaces;
@@ -79,6 +80,7 @@ public interface ILanguagePluginRegistry
     IReadOnlyList<ILanguagePlugin> AllPlugins      { get; }
     ILanguagePlugin?               GetByExtension(string extension);
     ILanguagePlugin?               GetByLanguage(string language);
+    IEnumerable<ILanguagePlugin> GetAllPlugins();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

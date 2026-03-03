@@ -36,7 +36,7 @@ public class IssueSearchResultDto
 
 public class UpdateStatusDto
 {
-    public Synthtax.Domain.Enums.BacklogStatus Status { get; set; }
+    public Synthtax.Core.Enums.BacklogStatus Status { get; set; }
 }
 
 public class UpdateProfileDto

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Synthtax.API.Filters;
-using Synthtax.Application.SuperAdmin.DTOs;
+using Synthtax.API.SuperAdmin.DTOs;
 using Synthtax.Application.Telemetry;
 
 namespace Synthtax.API.Controllers;
@@ -27,12 +27,7 @@ public sealed class AdminTelemetryController : ControllerBase
     // ── POST /api/v1/telemetry/ingest ─────────────────────────────────────
     /// <summary>
     /// Tar emot hälsorapport från ett installerat VSIX-plugin.
-    ///
-    /// <para>Öppen för alla autentiserade JWT-användare — VSIX skickar
-    /// hit utan att användaren ens märker det (bakgrundsanrop).</para>
-    ///
-    /// <para>Returen är alltid 204 — vi avslöjar aldrig fel för att
-    /// undvika att plugins spammar om det uppstår valideringsfel.</para>
+    /// Returen är alltid 204 — vi avslöjar aldrig fel.
     /// </summary>
     [Authorize]
     [HttpPost("api/v1/telemetry/ingest")]
@@ -41,7 +36,6 @@ public sealed class AdminTelemetryController : ControllerBase
         [FromBody] TelemetryIngestRequest request,
         CancellationToken ct = default)
     {
-        // Tyst accept — fel loggas internt, exponeras aldrig till klienten
         try { await _health.IngestAsync(request, ct); }
         catch { /* Loggas av GlobalHealthService */ }
 
@@ -52,8 +46,7 @@ public sealed class AdminTelemetryController : ControllerBase
     /// <summary>
     /// Hämtar aggregerad global hälsoöversikt baserad på telemetri
     /// från alla installerade plugins under de senaste N dagarna.
-    ///
-    /// <para>Kräver super-admin.</para>
+    /// Kräver super-admin.
     /// </summary>
     [Authorize]
     [RequireSystemAdmin]
@@ -71,7 +64,6 @@ public sealed class AdminTelemetryController : ControllerBase
     // ── GET /api/v1/admin/health/version-matrix ───────────────────────────
     /// <summary>
     /// Kryssmatris: plugin-version × VS-version → antal aktiva installationer.
-    /// Hjälper att prioritera vilka kombinationer att testa.
     /// </summary>
     [Authorize]
     [RequireSystemAdmin]
@@ -84,13 +76,12 @@ public sealed class AdminTelemetryController : ControllerBase
         var health = await _health.GetGlobalHealthAsync(
             Math.Clamp(lookbackDays, 1, 90), ct);
 
-        // Bygg matrisen från distributions
         var matrix = new VersionMatrixDto
         {
-            PluginVersions   = health.VersionDistribution,
-            VsVersions       = health.VsVersionDistribution,
-            TotalInstalls    = health.ActiveInstallations,
-            GeneratedAt      = health.GeneratedAt
+            PluginVersions = health.VersionDistribution,
+            VsVersions     = health.VsVersionDistribution,
+            TotalInstalls  = health.ActiveInstallations,
+            GeneratedAt    = health.GeneratedAt
         };
 
         return Ok(matrix);

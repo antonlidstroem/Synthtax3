@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Synthtax.Core.DTOs;
-using Synthtax.Core.Enums;
+
 using Synthtax.Core.Interfaces;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.API.Controllers;
 

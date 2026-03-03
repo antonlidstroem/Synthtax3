@@ -1,3 +1,5 @@
+using Synthtax.Core.Enums;
+
 namespace Synthtax.Core.Contracts;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -89,7 +91,7 @@ public interface IPluginRule
     string                    Name            { get; }
     string                    Description     { get; }
     string                    Category        { get; }
-    Synthtax.Core.Enums.Severity DefaultSeverity { get; }
+    Severity DefaultSeverity { get; }
     bool                      IsEnabled       { get; }
 
     /// <summary>

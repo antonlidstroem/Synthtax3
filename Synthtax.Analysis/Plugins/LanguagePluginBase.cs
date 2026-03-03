@@ -8,21 +8,20 @@ namespace Synthtax.Analysis.Plugins;
 
 /// <summary>
 /// Abstract base class for language plugins.
-/// Handles directory traversal, parallelism and error isolation so subclasses
-/// only need to implement AnalyzeFileAsync and declare their rules.
+/// Handles directory traversal, parallelism and error isolation.
 /// </summary>
 public abstract class LanguagePluginBase : ILanguagePlugin
 {
     protected readonly ILogger Logger;
 
-    public abstract string Language                  { get; }
-    public abstract string Version                   { get; }
+    public abstract string Language                       { get; }
+    public abstract string Version                        { get; }
     public abstract IReadOnlyList<string>       SupportedExtensions { get; }
     public abstract IReadOnlyList<ILanguageRule> Rules               { get; }
 
     protected LanguagePluginBase(ILogger logger) => Logger = logger;
 
-    // ── AnalyzeFileAsync default: run every enabled rule ─────────────────────
+    // ── AnalyzeFileAsync: run every enabled rule ──────────────────────────
 
     public virtual async Task<WebFileResultDto> AnalyzeFileAsync(
         string filePath, CancellationToken ct = default)
@@ -46,7 +45,8 @@ public abstract class LanguagePluginBase : ILanguagePlugin
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
-                    Logger.LogWarning(ex, "[{Lang}] Rule {Id} threw on {File}", Language, rule.RuleId, filePath);
+                    Logger.LogWarning(ex, "[{Lang}] Rule {Id} threw on {File}",
+                        Language, rule.RuleId, filePath);
                 }
             }
             result.IssueCount = result.Issues.Count;
@@ -60,7 +60,7 @@ public abstract class LanguagePluginBase : ILanguagePlugin
         return result;
     }
 
-    // ── AnalyzeDirectoryAsync default: parallel walk ──────────────────────────
+    // ── AnalyzeDirectoryAsync: parallel walk ──────────────────────────────
 
     public virtual async Task<List<WebFileResultDto>> AnalyzeDirectoryAsync(
         string directoryPath, bool recursive = true, CancellationToken ct = default)
@@ -76,10 +76,10 @@ public abstract class LanguagePluginBase : ILanguagePlugin
             new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount },
             async (file, token) => bag.Add(await AnalyzeFileAsync(file, token)));
 
-        return bag.OrderBy(r => r.FilePath).ToList();
+        return [.. bag.OrderBy(r => r.FilePath)];
     }
 
-    // ── Exclusion helper ──────────────────────────────────────────────────────
+    // ── Exclusion helper ──────────────────────────────────────────────────
 
     protected static bool IsExcluded(string path)
     {
@@ -91,11 +91,11 @@ public abstract class LanguagePluginBase : ILanguagePlugin
             || p.Contains("/.git/")
             || p.Contains("/coverage/")
             || p.Contains("/wwwroot/lib/")
-            || p.Contains("/.min.")
-            || Path.GetFileName(p).StartsWith('.', StringComparison.Ordinal);
+            || p.Contains(".min.")
+            || Path.GetFileName(p).StartsWith(".", StringComparison.Ordinal); // ← was char '.'
     }
 
-    // ── Convenience factory ───────────────────────────────────────────────────
+    // ── Convenience factory ───────────────────────────────────────────────
 
     protected WebIssueDto MakeIssue(
         string ruleId, string issueType, string title, string description,

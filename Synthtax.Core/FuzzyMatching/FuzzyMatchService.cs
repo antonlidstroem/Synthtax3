@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Tokenization;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Core.FuzzyMatching;
 

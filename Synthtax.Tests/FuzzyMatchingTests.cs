@@ -11,8 +11,8 @@ using Synthtax.Core.Fingerprinting;
 using Synthtax.Core.FuzzyMatching;
 using Synthtax.Core.Orchestration;
 using Synthtax.Core.Tokenization;
-using Synthtax.Domain.Entities;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Tests;
 

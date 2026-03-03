@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -10,14 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.SDK"          Version="17.12.9383" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools"          Version="17.12.2163" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"  Version="9.0.0" />
-    <PackageReference Include="CommunityToolkit.Mvvm"               Version="8.3.1" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.9383" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.2163" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
     <ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
     <ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
     <ProjectReference Include="..\Synthtax.Realtime\Synthtax.Realtime.csproj" />

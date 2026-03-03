@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Synthtax.Domain.Entities; // VIKTIGT: Använd domän-entiteterna
+using Synthtax.Core.Entities; // VIKTIGT: Använd domän-entiteterna
 
 namespace Synthtax.Infrastructure.Data.Configurations;
 

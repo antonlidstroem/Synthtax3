@@ -1,24 +1,21 @@
+// HeartbeatEvent has been moved to Synthtax.Core.Interfaces
+// to break the circular dependency (Core cannot reference Realtime).
+// Use Synthtax.Core.Interfaces.HeartbeatEvent instead.
+
 namespace Synthtax.Realtime.Contracts;
 
-/// <summary>Kanonisk lista över alla SignalR-metodnamn.</summary>
 public static class HubMethodNames
 {
-    // Server → Klient
     public const string AnalysisUpdated    = "AnalysisUpdated";
     public const string IssueCreated       = "IssueCreated";
     public const string IssueClosed        = "IssueClosed";
     public const string IssueStatusChanged = "IssueStatusChanged";
     public const string HealthScoreUpdated = "HealthScoreUpdated";
-    public const string LicenseChanged     = "LicenseChanged";
     public const string Heartbeat          = "Heartbeat";
-
-    // Klient → Server
     public const string JoinOrgGroup         = "JoinOrgGroup";
     public const string LeaveOrgGroup        = "LeaveOrgGroup";
     public const string AcknowledgeHeartbeat = "AcknowledgeHeartbeat";
 }
-
-// ─── Server → Klient events ──────────────────────────────────────────────────
 
 public sealed record AnalysisUpdatedEvent
 {
@@ -55,7 +52,6 @@ public sealed record IssueClosedEvent
     public required Guid   IssueId        { get; init; }
     public required string RuleId         { get; init; }
     public required string FilePath       { get; init; }
-    /// <summary>"AutoClosed" | "Resolved" | "FalsePositive"</summary>
     public required string Reason         { get; init; }
 }
 
@@ -81,22 +77,6 @@ public sealed record HealthScoreUpdatedEvent
     public required DateTime ChangedAt      { get; init; }
     public          double   Delta          => NewScore - OldScore;
 }
-
-public sealed record LicenseChangedEvent
-{
-    public required Guid   OrganizationId { get; init; }
-    public required string OldPlan        { get; init; }
-    public required string NewPlan        { get; init; }
-    public required string Message        { get; init; }
-}
-
-public sealed record HeartbeatEvent
-{
-    public DateTime ServerTime       { get; init; } = DateTime.UtcNow;
-    public int      ConnectedClients { get; init; }
-}
-
-// ─── Delad modell ─────────────────────────────────────────────────────────────
 
 public sealed record HubBacklogItem
 {

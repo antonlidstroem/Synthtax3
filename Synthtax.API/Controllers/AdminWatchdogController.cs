@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Synthtax.API.Filters;
-using Synthtax.Application.SuperAdmin.DTOs;
+using Synthtax.API.SuperAdmin.DTOs;
 using Synthtax.Application.Watchdog;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
 using Synthtax.Infrastructure.Services;
 
 namespace Synthtax.API.Controllers;
@@ -12,9 +13,6 @@ namespace Synthtax.API.Controllers;
 /// API för watchdog-status och manuella triggers.
 ///
 /// <para><b>Routing:</b> <c>api/v1/admin/watchdog</c></para>
-///
-/// <para>Låter super-admin se status för varje bevakad källa
-/// och manuellt trigga en omedelbar check utan att vänta på schemat.</para>
 /// </summary>
 [Authorize]
 [RequireSystemAdmin]
@@ -38,10 +36,6 @@ public sealed class AdminWatchdogController : ControllerBase
     }
 
     // ── GET /api/v1/admin/watchdog/status ─────────────────────────────────
-    /// <summary>
-    /// Hämtar status för alla registrerade watchdog-källor:
-    /// senaste körning, antal nya larm, nästa schemalagda körning.
-    /// </summary>
     [HttpGet("status")]
     [ProducesResponseType(typeof(WatchdogStatusResponse), 200)]
     public async Task<IActionResult> GetStatus(CancellationToken ct = default)
@@ -50,16 +44,16 @@ public sealed class AdminWatchdogController : ControllerBase
 
         foreach (var checker in _checkers)
         {
-            var lastRun = await _runs.GetLastRunAsync(checker.Source, ct);
+            var lastRun   = await _runs.GetLastRunAsync(checker.Source, ct);
             var newAlerts = await _alerts.CountNewAlertsAsync(checker.Source, hours: 24, ct);
 
             sources.Add(new WatchdogStatusDto
             {
-                Source         = checker.Source.ToString(),
-                IsEnabled      = true,
-                LastRunAt      = lastRun?.RanAt,
-                LastRunOk      = lastRun?.Success,
-                LastError      = lastRun?.ErrorMessage,
+                Source           = checker.Source.ToString(),
+                IsEnabled        = true,
+                LastRunAt        = lastRun?.RanAt,
+                LastRunOk        = lastRun?.Success,
+                LastError        = lastRun?.ErrorMessage,
                 NewAlertsLast24h = newAlerts,
                 NextScheduledRun = lastRun?.RanAt.Add(checker.CheckInterval)
             });
@@ -77,10 +71,6 @@ public sealed class AdminWatchdogController : ControllerBase
     }
 
     // ── POST /api/v1/admin/watchdog/{source}/trigger ─────────────────────
-    /// <summary>
-    /// Manuellt triggar en omedelbar check mot en specifik källtyp.
-    /// Nyttigt för att verifiera att en ny VS-version faktiskt skapar ett larm.
-    /// </summary>
     [HttpPost("{source}/trigger")]
     [ProducesResponseType(typeof(ManualTriggerResponse), 200)]
     [ProducesResponseType(404)]
@@ -113,16 +103,15 @@ public sealed class AdminWatchdogController : ControllerBase
 
         return Ok(new ManualTriggerResponse
         {
-            Source      = source,
+            Source        = source,
             FindingsCount = findings.Count,
-            NewAlerts   = newAlerts,
-            DurationMs  = (int)sw.ElapsedMilliseconds,
-            RanAt       = DateTime.UtcNow
+            NewAlerts     = newAlerts,
+            DurationMs    = (int)sw.ElapsedMilliseconds,
+            RanAt         = DateTime.UtcNow
         });
     }
 
     // ── GET /api/v1/admin/watchdog/runs ──────────────────────────────────
-    /// <summary>Körningshistorik för alla watchdog-källor (senaste 50).</summary>
     [HttpGet("runs")]
     [ProducesResponseType(typeof(IReadOnlyList<WatchdogRunDto>), 200)]
     public async Task<IActionResult> GetRuns(
@@ -132,12 +121,12 @@ public sealed class AdminWatchdogController : ControllerBase
         var runs = await _runs.GetRecentRunsAsync(Math.Min(limit, 200), ct);
         var dtos = runs.Select(r => new WatchdogRunDto
         {
-            Source      = r.Source.ToString(),
-            Success     = r.Success,
+            Source       = r.Source.ToString(),
+            Success      = r.Success,
             ErrorMessage = r.ErrorMessage,
-            NewAlerts   = r.NewAlerts,
-            DurationMs  = r.DurationMs,
-            RanAt       = r.RanAt
+            NewAlerts    = r.NewAlerts,
+            DurationMs   = r.DurationMs,
+            RanAt        = r.RanAt
         }).ToList();
 
         return Ok(dtos);
@@ -157,20 +146,10 @@ public sealed record ManualTriggerResponse
 
 public sealed record WatchdogRunDto
 {
-    public required string   Source        { get; init; }
-    public required bool     Success       { get; init; }
-    public          string?  ErrorMessage  { get; init; }
-    public required int      NewAlerts     { get; init; }
-    public required int      DurationMs    { get; init; }
-    public required DateTime RanAt         { get; init; }
-}
-
-// ── Repository-gränssnitt ─────────────────────────────────────────────────
-
-/// <summary>Persistens för WatchdogRun-protokoll.</summary>
-public interface IWatchdogRunRepository
-{
-    Task<WatchdogRun?>              GetLastRunAsync(WatchdogSource source, CancellationToken ct = default);
-    Task<IReadOnlyList<WatchdogRun>> GetRecentRunsAsync(int limit, CancellationToken ct = default);
-    Task                            SaveRunAsync(WatchdogRun run, CancellationToken ct = default);
+    public required string   Source       { get; init; }
+    public required bool     Success      { get; init; }
+    public          string?  ErrorMessage { get; init; }
+    public required int      NewAlerts    { get; init; }
+    public required int      DurationMs   { get; init; }
+    public required DateTime RanAt        { get; init; }
 }

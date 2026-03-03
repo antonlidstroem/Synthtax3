@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Synthtax.API.Filters;
-using Synthtax.Application.SuperAdmin.DTOs;
-using Synthtax.Domain.Entities;
+using Synthtax.API.Hubs;
+using Synthtax.API.SuperAdmin;
+using Synthtax.API.SuperAdmin.DTOs;
+using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Services;
 
 namespace Synthtax.API.Controllers;
@@ -24,8 +26,8 @@ namespace Synthtax.API.Controllers;
 [Produces("application/json")]
 public sealed class AdminAlertController : ControllerBase
 {
-    private readonly IAlertService                  _alerts;
-    private readonly IHubContext<AdminHub>           _hub;
+    private readonly IAlertService          _alerts;
+    private readonly IHubContext<AdminHub>  _hub;
 
     public AdminAlertController(
         IAlertService         alerts,
@@ -127,7 +129,6 @@ public sealed class AdminAlertController : ControllerBase
     // ── POST /api/v1/admin/alerts/dismiss-all-info ────────────────────────
     /// <summary>
     /// Bulk-dismiss av alla Info-larm som är äldre än 30 dagar.
-    /// Håller listan ren utan manuellt arbete.
     /// </summary>
     [HttpPost("dismiss-all-info")]
     [ProducesResponseType(typeof(BulkDismissResponse), 200)]
@@ -165,9 +166,9 @@ public sealed record BulkDismissResponse { public int DismissedCount { get; init
 /// <summary>Fullständig alert-vy med råpayload.</summary>
 public sealed record AlertDetailDto : AlertDto
 {
-    public string? RawPayloadJson { get; init; }
-    public string? ResolvedBy     { get; init; }
-    public DateTime? ResolvedAt   { get; init; }
+    public string?   RawPayloadJson { get; init; }
+    public string?   ResolvedBy     { get; init; }
+    public DateTime? ResolvedAt     { get; init; }
 }
 
 /// <summary>Badge-sammanfattning för dashboard-header.</summary>

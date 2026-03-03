@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
-using Synthtax.Domain.Entities;
+using Octokit;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Infrastructure.Entities;
 

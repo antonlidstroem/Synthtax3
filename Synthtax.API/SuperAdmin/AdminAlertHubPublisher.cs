@@ -1,15 +1,36 @@
 using Microsoft.AspNetCore.SignalR;
-using Synthtax.Application.SuperAdmin;
+using Synthtax.API.Hubs;
 
 namespace Synthtax.API.SuperAdmin;
 
+/// <summary>Definierar kontrakt för push-notiser till super-admin panelen.</summary>
+public interface IAdminAlertPublisher
+{
+    Task PublishAsync(AdminAlertNotification alert, CancellationToken ct = default);
+}
+
+/// <summary>Payload för AdminAlert SignalR-event.</summary>
+public sealed record AdminAlertNotification(
+    Guid     AlertId,
+    string   Title,
+    string   Severity,
+    string   Source,
+    DateTime CreatedAt);
+
+/// <summary>
+/// Publicerar watchdog-larm till alla inloggade super-admins via SignalR AdminHub.
+/// </summary>
 public sealed class AdminAlertHubPublisher : IAdminAlertPublisher
 {
-    private readonly IHubContext<Hubs.AdminHub> _hub;
+    public const string AdminGroupName    = "SuperAdmins";
+    public const string AlertUpdatedMethod = "WatchdogAlertUpdated";
+    public const string NewAlertMethod    = "WatchdogAlertNew";
 
-    public AdminAlertHubPublisher(IHubContext<Hubs.AdminHub> hub)
-        => _hub = hub;
+    private readonly IHubContext<AdminHub> _hub;
 
-    public Task PublishAsync(AdminAlert alert, CancellationToken ct = default)
-        => _hub.Clients.All.SendAsync("AdminAlert", alert, ct);
+    public AdminAlertHubPublisher(IHubContext<AdminHub> hub) => _hub = hub;
+
+    public Task PublishAsync(AdminAlertNotification alert, CancellationToken ct = default)
+        => _hub.Clients.Group(AdminGroupName)
+               .SendAsync(NewAlertMethod, alert, ct);
 }

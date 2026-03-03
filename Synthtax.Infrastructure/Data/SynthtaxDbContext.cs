@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Services;
 

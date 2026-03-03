@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Synthtax.Application.SuperAdmin.DTOs;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Data;
 
 namespace Synthtax.Application.SuperAdmin;

@@ -2,8 +2,11 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Synthtax.Application.Services;
+using Synthtax.Core.Contracts;
 using Synthtax.Core.Orchestration;
-using Synthtax.Realtime.Contracts;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
+
 
 namespace Synthtax.Application.Orchestration;
 
@@ -175,3 +178,4 @@ public sealed class AnalysisOrchestrator : IAnalysisOrchestrator
         };
     }
 }
+

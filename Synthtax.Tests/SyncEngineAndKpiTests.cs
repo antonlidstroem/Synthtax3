@@ -5,11 +5,11 @@ using FluentAssertions;
 using NSubstitute;
 using Synthtax.Application.Orchestration;
 using Synthtax.Core.Contracts;
-using Synthtax.Core.Enums;
+
 using Synthtax.Core.Fingerprinting;
 using Synthtax.Core.Orchestration;
-using Synthtax.Domain.Entities;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Tests;
 

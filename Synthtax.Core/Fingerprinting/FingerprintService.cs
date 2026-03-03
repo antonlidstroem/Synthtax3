@@ -44,7 +44,7 @@ namespace Synthtax.Core.Fingerprinting;
 /// </list>
 /// </para>
 ///
-/// <para><b>ERSÄTTER</b> <c>Synthtax.Domain.Services.FingerprintService</c> från Fas 1
+/// <para><b>ERSÄTTER</b> <c>Synthtax.Core.Services.FingerprintService</c> från Fas 1
 /// (som använde filsökväg + radnummer). Fas 2-versionen är semantiskt stabil.</para>
 /// </summary>
 public sealed class FingerprintService : IFingerprintService

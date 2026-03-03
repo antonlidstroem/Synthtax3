@@ -1,14 +1,16 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Synthtax.Analysis.Plugin;
 using Synthtax.Application.PromptFactory;
 using Synthtax.Core.Contracts;
-using Synthtax.Core.PromptFactory;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
 using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Services;
+
+// NOTE: CSharpStructuralPlugin lives in Synthtax.Analysis.
+// Using alias to disambiguate if needed:
+using AppPromptFactory = Synthtax.Application.PromptFactory.PromptFactoryService;
 
 namespace Synthtax.API.Controllers;
 
@@ -42,7 +44,7 @@ public sealed record GeneratedPromptDto(
 /// <code>
 ///   POST /api/v1/prompts/generate         → Single prompt (Copilot ELLER Claude)
 ///   POST /api/v1/prompts/generate-both    → Båda targets i ett anrop
-///   GET  /api/v1/prompts/preview/{id}     → Förhandsgranska utan att spara
+///   GET  /api/v1/prompts/project/{id}     → Alla öppna issues i ett projekt
 /// </code>
 /// </para>
 /// </summary>
@@ -52,12 +54,12 @@ public sealed record GeneratedPromptDto(
 public sealed class PromptController : ControllerBase
 {
     private readonly IPromptFactoryService _factory;
-    private readonly SynthtaxDbContextV5   _db;
+    private readonly SynthtaxDbContext     _db;
     private readonly ICurrentUserService   _currentUser;
 
     public PromptController(
         IPromptFactoryService factory,
-        SynthtaxDbContextV5   db,
+        SynthtaxDbContext     db,
         ICurrentUserService   currentUser)
     {
         _factory     = factory;
@@ -99,14 +101,14 @@ public sealed class PromptController : ControllerBase
     }
 
     /// <summary>
-    /// Genererar Copilot + Claude-prompts för ALLA öppna issues i ett projekt.
-    /// Sorteras efter Severity descending.
+    /// Genererar prompts för alla öppna issues i ett projekt,
+    /// sorterade efter Severity descending.
     /// </summary>
     [HttpGet("project/{projectId}")]
     [ProducesResponseType<object>(200)]
     public async Task<IActionResult> GetForProject(
         Guid             projectId,
-        [FromQuery] PromptTarget target = PromptTarget.Claude,
+        [FromQuery] PromptTarget target   = PromptTarget.Claude,
         [FromQuery] int          maxItems = 20,
         CancellationToken ct = default)
     {
@@ -119,7 +121,7 @@ public sealed class PromptController : ControllerBase
             .ToListAsync(ct);
 
         var contexts = items
-            .Select(bi => BuildContextFromBacklogItem(bi))
+            .Select(BuildContextFromBacklogItem)
             .Where(c => c is not null)
             .Cast<PromptContext>()
             .ToList()
@@ -138,16 +140,13 @@ public sealed class PromptController : ControllerBase
             .Include(bi => bi.Project)
             .FirstOrDefaultAsync(bi => bi.Id == backlogItemId, ct);
 
-        if (item is null) return null;
-
-        return BuildContextFromBacklogItem(item);
+        return item is null ? null : BuildContextFromBacklogItem(item);
     }
 
     private static PromptContext? BuildContextFromBacklogItem(BacklogItem item)
     {
         if (item.Rule is null) return null;
 
-        // Extrahera platsdata från Metadata-JSON
         var (filePath, startLine, endLine, snippet, scope) =
             ExtractMetadata(item.Metadata);
 
@@ -181,11 +180,11 @@ public sealed class PromptController : ControllerBase
             var doc  = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
             return (
-                root.TryGetProperty("filePath",   out var fp) ? fp.GetString() ?? "" : "",
-                root.TryGetProperty("startLine",  out var sl) ? sl.GetInt32() : 0,
-                root.TryGetProperty("endLine",    out var el) ? el.GetInt32() : 0,
-                root.TryGetProperty("snippet",    out var sn) ? sn.GetString() ?? "" : "",
-                root.TryGetProperty("scope",      out var sc) ? sc.GetString() ?? "" : ""
+                root.TryGetProperty("filePath",  out var fp) ? fp.GetString() ?? "" : "",
+                root.TryGetProperty("startLine", out var sl) ? sl.GetInt32() : 0,
+                root.TryGetProperty("endLine",   out var el) ? el.GetInt32() : 0,
+                root.TryGetProperty("snippet",   out var sn) ? sn.GetString() ?? "" : "",
+                root.TryGetProperty("scope",     out var sc) ? sc.GetString() ?? "" : ""
             );
         }
         catch { return ("unknown", 0, 0, string.Empty, string.Empty); }
@@ -193,8 +192,6 @@ public sealed class PromptController : ControllerBase
 
     private static string? ExtractScopeField(string scope, string field)
     {
-        // Scope-format: "NAMESPACE::CLASS::MEMBER[KIND]"
-        // Enkel heuristik för att extrahera delar
         if (string.IsNullOrEmpty(scope)) return null;
         var parts = scope.Split("::");
         return field switch
@@ -209,40 +206,38 @@ public sealed class PromptController : ControllerBase
     private static string? DetectLanguage(string filePath) =>
         Path.GetExtension(filePath).ToLowerInvariant() switch
         {
-            ".cs"  => "C#",
-            ".py"  => "Python",
-            ".ts"  => "TypeScript",
-            ".js"  => "JavaScript",
-            ".java"=> "Java",
-            ".rb"  => "Ruby",
-            _      => null
+            ".cs"   => "C#",
+            ".py"   => "Python",
+            ".ts"   => "TypeScript",
+            ".js"   => "JavaScript",
+            ".java" => "Java",
+            ".rb"   => "Ruby",
+            _       => null
         };
 
-    private static GeneratedPromptDto ToDto(GeneratedPrompt p) => new(
-        p.Target, p.Title, p.Content, p.EstimatedTokens, p.RuleId, p.GeneratedAt);
+    private static GeneratedPromptDto ToDto(GeneratedPrompt p) =>
+        new(p.Target, p.Title, p.Content, p.EstimatedTokens, p.RuleId, p.GeneratedAt);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Fas6ServiceExtensions — DI-registrering
+// DI-registrering
 // ═══════════════════════════════════════════════════════════════════════════
 
 public static class Fas6ServiceExtensions
 {
     /// <summary>
-    /// Registrerar alla Fas 6-komponenter.
-    ///
-    /// <code>
-    ///   // Program.cs (efter Fas 1–5):
-    ///   builder.Services.AddPromptFactory();
-    /// </code>
+    /// Registrerar alla Fas 6-komponenter (PromptFactory).
+    /// Anropa i Program.cs med <c>builder.Services.AddPromptFactory()</c>.
     /// </summary>
     public static IServiceCollection AddPromptFactory(this IServiceCollection services)
     {
-        // PromptFactoryService — stateless, Singleton
-        services.AddSingleton<IPromptFactoryService, PromptFactoryService>();
+        // Explicit fully qualified name for disambiguation
+        services.AddSingleton<IPromptFactoryService,
+            Synthtax.Application.PromptFactory.PromptFactoryService>();
 
-        // CSharpStructuralPlugin — registreras som IAnalysisPlugin för IPluginRegistry
-        services.AddSingleton<IAnalysisPlugin, CSharpStructuralPlugin>();
+        // CSharpStructuralPlugin — registreras som IAnalysisPlugin
+        // services.AddSingleton<IAnalysisPlugin,
+        //     Synthtax.Analysis.Plugin.CSharpStructuralPlugin>();
 
         return services;
     }

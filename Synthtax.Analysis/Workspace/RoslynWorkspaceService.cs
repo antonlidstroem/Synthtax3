@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Synthtax.Core.Interfaces;
 
 namespace Synthtax.Analysis.Workspace;
@@ -49,6 +50,7 @@ public sealed class RoslynWorkspaceService : IRoslynWorkspaceService
         _logger.LogInformation("Loading solution: {Path}", solutionPath);
         var solution = await workspace.OpenSolutionAsync(
             solutionPath, cancellationToken: cancellationToken);
+
         _logger.LogInformation("Solution loaded with {Count} project(s).",
             solution.Projects.Count());
 

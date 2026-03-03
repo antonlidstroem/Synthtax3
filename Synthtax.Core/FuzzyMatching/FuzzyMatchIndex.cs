@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Synthtax.Core.Entities;
 using Synthtax.Core.Tokenization;
 
 

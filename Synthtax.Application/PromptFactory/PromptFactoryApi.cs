@@ -1,10 +1,12 @@
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Analysis.Plugins;
 using Synthtax.Core.Contracts;
-using Synthtax.Core.Enums;
+
 using Synthtax.Core.PromptFactory;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Application.PromptFactory;
 

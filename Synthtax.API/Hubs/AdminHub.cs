@@ -1,25 +1,27 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
 
 namespace Synthtax.API.Hubs;
 
-/// <summary>Hub för SuperAdmin-realtidsnotifikationer.</summary>
+/// <summary>
+/// SignalR-hub för super-admin panelen.
+/// Alla inloggade super-admins läggs automatiskt till i gruppen "SuperAdmins"
+/// vid anslutning, och tar emot push-notiser om watchdog-larm.
+/// </summary>
+[Authorize]
 public sealed class AdminHub : Hub
 {
-    private readonly ILogger<AdminHub> _logger;
+    public const string GroupName = "SuperAdmins";
 
-    public AdminHub(ILogger<AdminHub> logger)
-        => _logger = logger;
-
-    public override Task OnConnectedAsync()
+    public override async Task OnConnectedAsync()
     {
-        _logger.LogDebug("Admin ansluten: {ConnId}.", Context.ConnectionId);
-        return base.OnConnectedAsync();
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName);
+        await base.OnConnectedAsync();
     }
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogDebug("Admin frånkopplad: {ConnId}.", Context.ConnectionId);
-        return base.OnDisconnectedAsync(exception);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupName);
+        await base.OnDisconnectedAsync(exception);
     }
 }

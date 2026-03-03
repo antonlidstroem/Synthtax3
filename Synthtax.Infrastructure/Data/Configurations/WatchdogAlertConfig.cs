@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Infrastructure.Data.Configurations;
 

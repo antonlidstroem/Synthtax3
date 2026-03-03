@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Synthtax.Application.Orchestration;
 using Synthtax.Core.Orchestration;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Application.Extensions;
 

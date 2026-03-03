@@ -1,6 +1,6 @@
 using System.Text;
 using Synthtax.Core.Contracts;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Core.PromptFactory;
 

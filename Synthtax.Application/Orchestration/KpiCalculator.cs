@@ -1,7 +1,7 @@
-using Synthtax.Core.Enums;
+
 using Synthtax.Core.Orchestration;
-using Synthtax.Domain.Entities;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Entities;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Application.Orchestration;
 

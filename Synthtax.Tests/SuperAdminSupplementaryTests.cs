@@ -5,7 +5,7 @@
 using FluentAssertions;
 using Synthtax.Application.SuperAdmin.DTOs;
 using Synthtax.Application.Watchdog;
-using Synthtax.Domain.Entities;
+using Synthtax.Core.Entities;
 using NSubstitute;
 
 namespace Synthtax.Tests;

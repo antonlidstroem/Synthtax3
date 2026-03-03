@@ -29,12 +29,12 @@
 
 		<!-- JSON -->
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="Octokit" Version="14.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Synthtax.Application\Synthtax.Application.csproj" />
 		<ProjectReference Include="..\Synthtax.Core\Synthtax.Core.csproj" />
-		<ProjectReference Include="..\Synthtax.Domain\Synthtax.Domain.csproj" />
 	</ItemGroup>
 
 </Project>

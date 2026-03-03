@@ -2,9 +2,8 @@ using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Synthtax.Core.DTOs;
-using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
-using Synthtax.Domain.Enums;
+using Synthtax.Core.Enums;
 
 namespace Synthtax.Analysis.Languages.Css;
 

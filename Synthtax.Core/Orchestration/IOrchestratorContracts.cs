@@ -1,6 +1,5 @@
 using Synthtax.Core.Contracts;
 using Synthtax.Core.Enums;
-using Synthtax.Domain.Enums;
 
 namespace Synthtax.Core.Orchestration;
 

@@ -1,4 +1,5 @@
 using Synthtax.Core.Contracts;
+using Synthtax.Core.Entities;
 
 
 namespace Synthtax.Core.FuzzyMatching;
