@@ -24,19 +24,4 @@ public sealed class SynthtaxHubPusher : ISynthtaxHubPusher
                .Group(OrgGroup(payload.OrganizationId))
                .SendAsync(HubMethodNames.IssueStatusChanged, payload, ct);
 
-    public Task PushLicenseChangedAsync(
-        LicenseChangedEvent payload,
-        CancellationToken   ct = default)
-        => _hub.Clients
-               .Group(OrgGroup(payload.OrganizationId))
-               .SendAsync(HubMethodNames.LicenseChanged, payload, ct);
-
-    public Task PushHeartbeatAsync(
-        HeartbeatEvent    payload,
-        CancellationToken ct = default)
-        => _hub.Clients.All
-               .SendAsync(HubMethodNames.Heartbeat, payload, ct);
-
-    private static string OrgGroup(Guid organizationId)
-        => $"org:{organizationId}";
-}
+    

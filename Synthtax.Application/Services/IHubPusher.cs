@@ -15,6 +15,5 @@ public interface IHubPusher
     Task PushIssueStatusChangedAsync(IssueStatusChangedEvent payload,
         CancellationToken ct = default);
 
-    Task PushLicenseChangedAsync(LicenseChangedEvent payload,
-        CancellationToken ct = default);
+   
 }

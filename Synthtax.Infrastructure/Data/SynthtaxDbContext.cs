@@ -26,10 +26,12 @@ public class SynthtaxDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BacklogItem> BacklogItems => Set<BacklogItem>();
     public DbSet<Comment> Comments => Set<Comment>();
 
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     // --- Multi-tenancy & Identity DbSets ---
-    public DbSet<Organization> Organizations => Set<Organization>();
-    public DbSet<OrganizationMembership> OrganizationMemberships => Set<OrganizationMembership>();
-    public DbSet<Invitation> Invitations => Set<Invitation>();
+
 
     // --- Watchdog & Telemetry (Fas 9) ---
     public DbSet<WatchdogAlert> WatchdogAlerts => Set<WatchdogAlert>();

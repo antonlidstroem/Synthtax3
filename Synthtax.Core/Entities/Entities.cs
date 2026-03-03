@@ -44,25 +44,6 @@ public class Project : AuditableEntity, ISoftDeletable
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AnalysisSession
-// ═══════════════════════════════════════════════════════════════════════════
-//public class AnalysisSession : AuditableEntity
-//{
-//    public Guid     Id           { get; set; } = Guid.NewGuid();
-//    public Guid     ProjectId    { get; set; }
-//    public DateTime Timestamp    { get; set; } = DateTime.UtcNow;
-//    public double   OverallScore { get; set; }
-//    public int      NewIssues     { get; set; }
-//    public int      ResolvedIssues { get; set; }
-//    public int      TotalIssues  { get; set; }
-//    public long     DurationMs   { get; set; }
-//    public string?  CommitSha    { get; set; }
-//    public string?  ErrorsJson   { get; set; }
-
-//    public Project Project { get; set; } = null!;
-//}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Comment
 // ═══════════════════════════════════════════════════════════════════════════
 public class Comment : AuditableEntity

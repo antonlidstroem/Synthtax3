@@ -3,7 +3,7 @@ using Synthtax.Core.DTOs;
 using Synthtax.Core.Enums;
 using Synthtax.Core.Interfaces;
 using Synthtax.Infrastructure.Data;
-using Synthtax.Infrastructure.Entities;
+using Synthtax.Core.Entities;
 
 namespace Synthtax.Infrastructure.Repositories;
 

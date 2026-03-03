@@ -15,7 +15,7 @@ public class ApplicationUser : IdentityUser
     public DateTime? LastLoginAt { get; set; }
     public Guid TenantId { get; set; } = Guid.Empty;
 
-    public ICollection<OrganizationMembership> Memberships { get; set; } = [];
+  
 
     /// <summary>
     /// Kommaseparerad lista med modulnamn som användaren har åtkomst till.
