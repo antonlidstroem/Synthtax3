@@ -39,4 +39,9 @@ public sealed class LanguagePluginRegistry : ILanguagePluginRegistry
 
     public ILanguagePlugin? GetByLanguage(string language)
         => _byLang.TryGetValue(language, out var p) ? p : null;
+
+    public IEnumerable<ILanguagePlugin> GetAllPlugins()
+    {
+        throw new NotImplementedException();
+    }
 }

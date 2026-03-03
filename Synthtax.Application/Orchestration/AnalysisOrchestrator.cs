@@ -87,6 +87,11 @@ public sealed class AnalysisOrchestrator : IAnalysisOrchestrator
         return result with { TotalDuration = totalSw.Elapsed };
     }
 
+    Task<Core.Orchestration.OrchestratorResult> IAnalysisOrchestrator.RunAsync(OrchestratorRequest request, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
     private async Task<(IReadOnlyList<ScannedIssue> Issues, TimeSpan Duration)>
         RunScanPhaseAsync(
             OrchestratorRequest request,

@@ -26,6 +26,7 @@
 		<!-- Extensions -->
 		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Graph" Version="5.103.0" />
 
 		<!-- JSON -->
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

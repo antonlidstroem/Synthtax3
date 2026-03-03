@@ -2,12 +2,12 @@ namespace Synthtax.Core.Enums;
 
 public enum BacklogCategory
 {
-    General        = 0,
-    Architecture   = 1,
-    Security       = 2,
-    Performance    = 3,
-    Maintainability = 4,
-    Completeness   = 5,
-    NullSafety     = 6,
-    Correctness    = 7
+    Bug            = 0,
+    Feature        = 1,
+    TechDebt       = 2,
+    Improvement    = 3,
+    Security       = 4,
+    Performance    = 5,
+    Documentation  = 6,
+    Other          = 99,
 }

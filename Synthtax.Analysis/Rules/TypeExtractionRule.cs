@@ -5,7 +5,7 @@ using Synthtax.Core.Enums;
 
 namespace Synthtax.Analysis.Rules;
 
-public sealed class TypeExtractionRule : ISynthtaxRule
+public class TypeExtractionRule : ISynthtaxRule
 {
     public static string RuleId => "SA002";
     string ISynthtaxRule.RuleId => RuleId;

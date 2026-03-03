@@ -10,7 +10,7 @@ public partial class LoginView : Window
     {
         InitializeComponent();
 
-        // Konfigurera API-URL har. Byt mot din faktiska URL.
+        // Byt URL mot din faktiska API-adress
         var auth = new AuthService("https://localhost:5001");
         DataContext = new LoginViewModel(auth);
     }

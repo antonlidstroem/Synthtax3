@@ -1,3 +1,4 @@
+using Synthtax.Core.Events;
 using Synthtax.Realtime.Contracts;
 
 namespace Synthtax.Application.Services;

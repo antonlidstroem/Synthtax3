@@ -1,16 +1,21 @@
 <Window x:Class="Synthtax.Admin.Views.LoginView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Synthtax.Admin"
         Title="Synthtax Admin — Logga in"
         Width="420" Height="480"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource PrimaryBrush}">
 
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    <local:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
+  </Window.Resources>
+
   <Grid>
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="320">
 
-      <!-- Logo / rubrik -->
       <TextBlock Text="SYNTHTAX" FontSize="28" FontWeight="Bold"
                  Foreground="{StaticResource AccentBrush}"
                  HorizontalAlignment="Center" Margin="0,0,0,4"/>
@@ -18,37 +23,32 @@
                  Foreground="{StaticResource MutedBrush}"
                  HorizontalAlignment="Center" Margin="0,0,0,36"/>
 
-      <!-- Användarnamn -->
       <TextBlock Text="Användarnamn" Foreground="{StaticResource MutedBrush}"
                  FontSize="12" Margin="0,0,0,6"/>
       <TextBox x:Name="UsernameBox"
                Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                Margin="0,0,0,16"/>
 
-      <!-- Lösenord -->
       <TextBlock Text="Lösenord" Foreground="{StaticResource MutedBrush}"
                  FontSize="12" Margin="0,0,0,6"/>
       <PasswordBox x:Name="PasswordBox" Margin="0,0,0,24"/>
 
-      <!-- Felmeddelande -->
       <TextBlock Text="{Binding ErrorMessage}"
                  Foreground="{StaticResource DangerBrush}"
                  FontSize="12" TextWrapping="Wrap"
-                 Visibility="{Binding HasError, Converter={x:Static BooleanToVisibilityConverter.Default}}"
+                 Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}"
                  Margin="0,0,0,12"/>
 
-      <!-- Login-knapp -->
       <Button Content="Logga in"
               Style="{StaticResource BaseButton}"
               Height="42"
-              IsEnabled="{Binding IsBusy, Converter={x:Static InverseBoolConverter.Default}}"
+              IsEnabled="{Binding IsBusy, Converter={StaticResource InvBoolToVis}}"
               Click="LoginButton_Click"/>
 
-      <!-- Spinner -->
       <TextBlock Text="Autentiserar..." FontSize="12"
                  Foreground="{StaticResource MutedBrush}"
                  HorizontalAlignment="Center" Margin="0,12,0,0"
-                 Visibility="{Binding IsBusy, Converter={x:Static BooleanToVisibilityConverter.Default}}"/>
+                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
     </StackPanel>
   </Grid>
 </Window>

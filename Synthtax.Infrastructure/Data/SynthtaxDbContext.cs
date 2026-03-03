@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Graph;
+using Octokit;
 using Synthtax.Core.Entities;
 using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Services;
+using Project = Synthtax.Core.Entities.Project;
 
 namespace Synthtax.Infrastructure.Data;
 
@@ -43,7 +46,7 @@ public class SynthtaxDbContext : IdentityDbContext<ApplicationUser>
         // --- Global Query Filters ---
         // Vi kombinerar Soft Delete och Tenant-isolering i ett filter per entitet
 
-        modelBuilder.Entity<Project>().HasQueryFilter(p =>
+        modelBuilder.Entity<Microsoft.CodeAnalysis.Project>().HasQueryFilter(p =>
             !p.IsDeleted && (_currentUser == null || _currentUser.IsSystemAdmin || p.TenantId == _currentUser.TenantId));
 
         modelBuilder.Entity<BacklogItem>().HasQueryFilter(bi =>
