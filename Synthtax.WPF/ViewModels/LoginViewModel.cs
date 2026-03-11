@@ -6,6 +6,9 @@ namespace Synthtax.WPF.ViewModels;
 
 public partial class LoginViewModel : ViewModelBase
 {
+
+
+
     private string _username = string.Empty;
     private string _password = string.Empty;
 

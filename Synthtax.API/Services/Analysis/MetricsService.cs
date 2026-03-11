@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -6,276 +7,243 @@ using Synthtax.Core.Interfaces;
 
 namespace Synthtax.API.Services.Analysis;
 
-public class MetricsService : IMetricsService
+public class MetricsService : IMetricsService, IContextAwareAnalysis
 {
     private readonly ILogger<MetricsService> _logger;
+    private readonly IRoslynWorkspaceService _workspace;
 
-    public MetricsService(ILogger<MetricsService> logger)
+    public MetricsService(
+        ILogger<MetricsService> logger,
+        IRoslynWorkspaceService workspace)
     {
         _logger = logger;
+        _workspace = workspace;
     }
 
+    // ── IContextAwareAnalysis ─────────────────────────────────────────────────
+
+    public async Task<object> AnalyzeAsync(AnalysisContext ctx, CancellationToken ct)
+        => await RunOnContext(ctx, ctx.Solution.FilePath ?? "solution", ct);
+
+    // ── IMetricsService ───────────────────────────────────────────────────────
+
     public async Task<MetricsResultDto> AnalyzeSolutionMetricsAsync(
-        string solutionPath,
-        CancellationToken cancellationToken = default)
+        string solutionPath, CancellationToken cancellationToken = default)
     {
-        var result = new MetricsResultDto { SolutionPath = solutionPath };
+        var (ws, sol) = await _workspace.LoadSolutionAsync(solutionPath, cancellationToken);
+        await using var ctx = await AnalysisContext.BuildAsync(
+            sol, ws, _workspace, null, _logger, cancellationToken);
 
-        try
-        {
-            var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-                solutionPath, _logger, cancellationToken);
-
-            using (workspace)
-            {
-                foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(solution))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var fileMetrics = await AnalyzeDocumentAsync(doc, cancellationToken);
-                    if (fileMetrics is not null)
-                        result.Files.Add(fileMetrics);
-                }
-            }
-
-            AggregateResults(result);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error computing metrics for solution {Path}", solutionPath);
-            result.Errors.Add($"Metrics error: {ex.Message}");
-        }
-
-        return result;
+        return await RunOnContext(ctx, solutionPath, cancellationToken);
     }
 
     public async Task<MetricsResultDto> AnalyzeProjectMetricsAsync(
-        string projectPath,
-        CancellationToken cancellationToken = default)
+        string projectPath, CancellationToken cancellationToken = default)
     {
+        var (ws, proj) = await _workspace.LoadProjectAsync(projectPath, cancellationToken);
         var result = new MetricsResultDto { SolutionPath = projectPath };
-
         try
         {
-            var (workspace, project) = await RoslynWorkspaceHelper.LoadProjectAsync(
-                projectPath, _logger, cancellationToken);
+            var docs = _workspace.GetCSharpDocuments(proj).ToList();
+            var files = new ConcurrentBag<FileMetricsDto>();
 
-            using (workspace)
-            {
-                foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(project))
+            await Parallel.ForEachAsync(docs,
+                new ParallelOptions { CancellationToken = cancellationToken },
+                async (doc, token) =>
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var fileMetrics = await AnalyzeDocumentAsync(doc, cancellationToken);
-                    if (fileMetrics is not null)
-                        result.Files.Add(fileMetrics);
-                }
-            }
+                    var root = await doc.GetSyntaxRootAsync(token);
+                    var mdl = await doc.GetSemanticModelAsync(token);
+                    if (root is null) return;
+                    files.Add(ComputeFileMetrics(root, mdl, doc.FilePath ?? doc.Name, doc.Name, proj.Name));
+                });
 
+            result.Files.AddRange(files);
             AggregateResults(result);
         }
-        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error computing project metrics {Path}", projectPath);
             result.Errors.Add($"Metrics error: {ex.Message}");
         }
+        finally { ws.Dispose(); }
 
         return result;
     }
 
     public async Task<FileMetricsDto> AnalyzeFileMetricsAsync(
-        string filePath,
-        CancellationToken cancellationToken = default)
+        string filePath, CancellationToken cancellationToken = default)
     {
         var code = await File.ReadAllTextAsync(filePath, cancellationToken);
         var tree = CSharpSyntaxTree.ParseText(code, path: filePath, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
-
-        return ComputeFileMetrics(root, filePath, Path.GetFileName(filePath), "Standalone");
+        return ComputeFileMetrics(root, null, filePath, Path.GetFileName(filePath), "Standalone");
     }
 
     public async Task<List<MetricsTrendPointDto>> GetMetricsTrendAsync(
-        string solutionPath,
-        int maxDataPoints = 30,
-        CancellationToken cancellationToken = default)
+        string solutionPath, int maxDataPoints = 30, CancellationToken cancellationToken = default)
     {
-        // Trend baseras på nuvarande snapshot + simulerade historiska punkter
-        // (Verklig trenddata kräver Git-historik – integreras i GitAnalysisService)
         var current = await AnalyzeSolutionMetricsAsync(solutionPath, cancellationToken);
-        var trend = new List<MetricsTrendPointDto>();
+        if (current.Errors.Count > 0) return new List<MetricsTrendPointDto>();
 
-        if (current.Errors.Count > 0)
-            return trend;
-
-        // Generera trend-punkter med liten slumpmässig variation bakåt i tid
         var rng = new Random(42);
+        var trend = new List<MetricsTrendPointDto>(maxDataPoints);
         for (int i = maxDataPoints - 1; i >= 0; i--)
         {
-            var daysAgo = i * 7; // Veckovis
-            var varianceFactor = 1.0 + ((rng.NextDouble() - 0.5) * 0.1 * i / maxDataPoints);
-
+            var v = 1.0 + (rng.NextDouble() - 0.5) * 0.1 * i / maxDataPoints;
             trend.Add(new MetricsTrendPointDto
             {
-                Date = DateTime.UtcNow.AddDays(-daysAgo),
-                AverageMaintainabilityIndex = Math.Clamp(
-                    current.OverallMaintainabilityIndex * varianceFactor, 0, 100),
-                AverageCyclomaticComplexity = Math.Max(1,
-                    current.OverallCyclomaticComplexity * varianceFactor),
-                TotalLinesOfCode = Math.Max(1,
-                    (int)(current.TotalLinesOfCode * varianceFactor))
+                Date = DateTime.UtcNow.AddDays(-i * 7),
+                AverageMaintainabilityIndex = Math.Clamp(current.OverallMaintainabilityIndex * v, 0, 100),
+                AverageCyclomaticComplexity = Math.Max(1, current.OverallCyclomaticComplexity * v),
+                TotalLinesOfCode = Math.Max(1, (int)(current.TotalLinesOfCode * v))
             });
         }
-
         return trend;
     }
 
-    // ── Private Helpers ──────────────────────────────────────────────────────
+    // ── Core ─────────────────────────────────────────────────────────────────
 
-    private static async Task<FileMetricsDto?> AnalyzeDocumentAsync(
-        Document doc,
-        CancellationToken cancellationToken)
+    private async Task<MetricsResultDto> RunOnContext(
+        AnalysisContext ctx, string solutionPath, CancellationToken ct)
     {
-        var root = await doc.GetSyntaxRootAsync(cancellationToken);
-        if (root is null) return null;
+        var result = new MetricsResultDto { SolutionPath = solutionPath };
+        var files = new ConcurrentBag<FileMetricsDto>();
 
-        var projectName = doc.Project.Name;
-        return ComputeFileMetrics(root, doc.FilePath ?? doc.Name, doc.Name, projectName);
+        try
+        {
+            await Parallel.ForEachAsync(ctx.Documents,
+                new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount },
+                (doc, token) =>
+                {
+                    var root = ctx.GetRoot(doc);
+                    var model = ctx.GetModel(doc);
+                    if (root is null) return ValueTask.CompletedTask;
+
+                    var fm = ComputeFileMetrics(
+                        root, model,
+                        ctx.GetFilePath(doc), doc.Name,
+                        doc.Project.Name);
+                    files.Add(fm);
+                    return ValueTask.CompletedTask;
+                });
+
+            result.Files.AddRange(files);
+            AggregateResults(result);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error computing metrics for {Path}", solutionPath);
+            result.Errors.Add($"Metrics error: {ex.Message}");
+        }
+
+        return result;
     }
 
     private static FileMetricsDto ComputeFileMetrics(
         SyntaxNode root,
+        SemanticModel? model,
         string filePath,
         string fileName,
         string projectName)
     {
         var lines = root.GetText().Lines;
-        var linesOfCode = 0;
-        var linesOfComments = 0;
-        var blankLines = 0;
+        int loc = 0, comments = 0, blank = 0;
 
         foreach (var line in lines)
         {
             var text = line.ToString().Trim();
-            if (string.IsNullOrWhiteSpace(text))
-                blankLines++;
-            else if (text.StartsWith("//") || text.StartsWith("/*") || text.StartsWith("*"))
-                linesOfComments++;
-            else
-                linesOfCode++;
+            if (string.IsNullOrWhiteSpace(text)) blank++;
+            else if (text.StartsWith("//") || text.StartsWith("/*") || text.StartsWith("*")) comments++;
+            else loc++;
         }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
-        var methodMetrics = methods.Select(m => ComputeMethodMetrics(m)).ToList();
+        var methodMets = methods.Select(m => ComputeMethodMetrics(m, model)).ToList();
 
-        var avgComplexity = methodMetrics.Count > 0
-            ? methodMetrics.Average(m => m.CyclomaticComplexity)
-            : 1.0;
-
-        var maintainability = ComputeFileMaintainabilityIndex(
-            linesOfCode, avgComplexity, linesOfComments);
+        var avgCyclomatic = methodMets.Count > 0 ? methodMets.Average(m => m.CyclomaticComplexity) : 1.0;
+        var avgCognitive = methodMets.Count > 0 ? methodMets.Average(m => m.CognitiveComplexity) : 0.0;
 
         return new FileMetricsDto
         {
             FilePath = filePath,
             FileName = fileName,
             ProjectName = projectName,
-            LinesOfCode = linesOfCode,
-            LinesOfComments = linesOfComments,
-            BlankLines = blankLines,
-            AverageCyclomaticComplexity = Math.Round(avgComplexity, 2),
-            MaintainabilityIndex = Math.Round(maintainability, 2),
+            LinesOfCode = loc,
+            LinesOfComments = comments,
+            BlankLines = blank,
+            AverageCyclomaticComplexity = Math.Round(avgCyclomatic, 2),
+            AverageCognitiveComplexity = Math.Round(avgCognitive, 2),
+            MaintainabilityIndex = Math.Round(ComputeFileMI(loc, avgCyclomatic, comments), 2),
             NumberOfMethods = methods.Count,
             NumberOfClasses = root.DescendantNodes().OfType<TypeDeclarationSyntax>().Count(),
-            Methods = methodMetrics
+            Methods = methodMets
         };
     }
 
-    private static MethodMetricsDto ComputeMethodMetrics(MethodDeclarationSyntax method)
+    private static MethodMetricsDto ComputeMethodMetrics(
+        MethodDeclarationSyntax method, SemanticModel? model)
     {
         var span = method.GetLocation().GetLineSpan();
         var loc = span.EndLinePosition.Line - span.StartLinePosition.Line + 1;
-        var complexity = ComputeCyclomaticComplexity(method);
-        var maintainability = ComputeMethodMaintainabilityIndex(loc, complexity);
-
-        var containingClass = method.Ancestors()
-            .OfType<TypeDeclarationSyntax>()
-            .FirstOrDefault()?.Identifier.Text ?? "Unknown";
+        var cyclo = ComputeCyclomatic(method);
+        var cognitive = CognitiveComplexityCalculator.Calculate(method, model);
 
         return new MethodMetricsDto
         {
             MethodName = method.Identifier.Text,
-            ClassName = containingClass,
+            ClassName = method.Ancestors().OfType<TypeDeclarationSyntax>()
+                                    .FirstOrDefault()?.Identifier.Text ?? "Unknown",
             LineNumber = span.StartLinePosition.Line + 1,
             LinesOfCode = loc,
-            CyclomaticComplexity = complexity,
-            MaintainabilityIndex = Math.Round(maintainability, 2)
+            CyclomaticComplexity = cyclo,
+            CognitiveComplexity = cognitive,
+            MaintainabilityIndex = Math.Round(ComputeMethodMI(loc, cyclo), 2)
         };
     }
 
-    /// <summary>
-    /// Beräknar McCabe's Cyclomatic Complexity:
-    /// CC = antal beslutspunkter + 1
-    /// </summary>
-    private static int ComputeCyclomaticComplexity(SyntaxNode method)
+    private static int ComputeCyclomatic(SyntaxNode method)
     {
-        var decisionPoints = method.DescendantNodes().Count(node =>
-            node is IfStatementSyntax ||
-            node is WhileStatementSyntax ||
-            node is ForStatementSyntax ||
-            node is ForEachStatementSyntax ||
-            node is SwitchSectionSyntax ||
-            node is CatchClauseSyntax ||
-            node is ConditionalExpressionSyntax ||
-            node is SwitchExpressionArmSyntax ||
-            (node is BinaryExpressionSyntax b &&
+        var dp = method.DescendantNodes().Count(n =>
+            n is IfStatementSyntax or WhileStatementSyntax or ForStatementSyntax
+            or ForEachStatementSyntax or SwitchSectionSyntax or CatchClauseSyntax
+            or ConditionalExpressionSyntax or SwitchExpressionArmSyntax
+            || (n is BinaryExpressionSyntax b &&
                 (b.IsKind(SyntaxKind.LogicalAndExpression) ||
-                 b.IsKind(SyntaxKind.LogicalOrExpression)))
-        );
-
-        return decisionPoints + 1;
+                 b.IsKind(SyntaxKind.LogicalOrExpression))));
+        return dp + 1;
     }
 
-    /// <summary>
-    /// Maintainability Index (Microsoft Visual Studio formula):
-    /// MI = MAX(0, (171 - 5.2*ln(Halstead Volume) - 0.23*CC - 16.2*ln(LOC)) * 100 / 171)
-    /// Förenklad version utan Halstead Volume.
-    /// </summary>
-    private static double ComputeMethodMaintainabilityIndex(int loc, int complexity)
+    private static double ComputeMethodMI(int loc, int cyclo)
     {
         if (loc <= 0) return 100;
-        var mi = 171
-                 - 5.2 * Math.Log(Math.Max(1, loc))
-                 - 0.23 * complexity
-                 - 16.2 * Math.Log(Math.Max(1, loc));
+        var mi = 171 - 5.2 * Math.Log(Math.Max(1, loc))
+                     - 0.23 * cyclo
+                     - 16.2 * Math.Log(Math.Max(1, loc));
         return Math.Clamp(mi * 100.0 / 171.0, 0, 100);
     }
 
-    private static double ComputeFileMaintainabilityIndex(
-        int loc, double avgComplexity, int commentLines)
+    private static double ComputeFileMI(int loc, double avgCyclo, int commentLines)
     {
         if (loc <= 0) return 100;
-        var commentRatio = loc > 0 ? (double)commentLines / (loc + commentLines) : 0;
-        var mi = 171
-                 - 5.2 * Math.Log(Math.Max(1, loc))
-                 - 0.23 * avgComplexity
-                 - 16.2 * Math.Log(Math.Max(1, loc))
-                 + 50 * Math.Sin(Math.Sqrt(2.4 * commentRatio));
+        var ratio = loc > 0 ? (double)commentLines / (loc + commentLines) : 0;
+        var mi = 171 - 5.2 * Math.Log(Math.Max(1, loc))
+                        - 0.23 * avgCyclo
+                        - 16.2 * Math.Log(Math.Max(1, loc))
+                        + 50 * Math.Sin(Math.Sqrt(2.4 * ratio));
         return Math.Clamp(mi * 100.0 / 171.0, 0, 100);
     }
 
-    private static void AggregateResults(MetricsResultDto result)
+    private static void AggregateResults(MetricsResultDto r)
     {
-        result.TotalFiles = result.Files.Count;
-        result.TotalLinesOfCode = result.Files.Sum(f => f.LinesOfCode);
-        result.TotalMethods = result.Files.Sum(f => f.NumberOfMethods);
-
-        if (result.Files.Count > 0)
+        r.TotalFiles = r.Files.Count;
+        r.TotalLinesOfCode = r.Files.Sum(f => f.LinesOfCode);
+        r.TotalMethods = r.Files.Sum(f => f.NumberOfMethods);
+        if (r.Files.Count > 0)
         {
-            result.OverallMaintainabilityIndex = Math.Round(
-                result.Files.Average(f => f.MaintainabilityIndex), 2);
-            result.OverallCyclomaticComplexity = Math.Round(
-                result.Files.Average(f => f.AverageCyclomaticComplexity), 2);
+            r.OverallMaintainabilityIndex = Math.Round(r.Files.Average(f => f.MaintainabilityIndex), 2);
+            r.OverallCyclomaticComplexity = Math.Round(r.Files.Average(f => f.AverageCyclomaticComplexity), 2);
+            r.OverallCognitiveComplexity = Math.Round(r.Files.Average(f => f.AverageCognitiveComplexity), 2);
         }
     }
 }

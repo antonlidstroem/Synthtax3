@@ -1,21 +1,39 @@
+using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Synthtax.Core.DTOs;
 using Synthtax.Core.Interfaces;
-using System.Text.RegularExpressions;
 
 namespace Synthtax.API.Services.Analysis;
 
 /// <summary>
-/// Heuristisk AI-detektering baserad på kodmönster typiska för AI-genererad C#-kod.
-/// OBS: Experimentell funktion – falska positiver förekommer.
+/// Improved AI-Detection service.
+///
+/// NEW signals vs original:
+///   VariableConsistency    — same conceptual value renamed between methods (result/response/output)
+///   BoilerplateRatio       — unusually high ratio of property getters, constructors, null-guards
+///   HallucinatedApiHints   — member accesses on types where the called member doesn't exist
+///                            (requires SemanticModel; logged as info, not hard error)
+///   InconsistentNaming     — mixed casing conventions in same file
+///   ExcessiveCommentCoverage (renamed/improved from HighXmlDocDensity)
 /// </summary>
-public class AIDetectionService : IAIDetectionService
+public class AIDetectionService : IAIDetectionService, IContextAwareAnalysis
 {
     private readonly ILogger<AIDetectionService> _logger;
+    private readonly IRoslynWorkspaceService _workspace;
 
-    // Phrases extremely common in AI-generated XML doc comments
+    public AIDetectionService(
+        ILogger<AIDetectionService> logger,
+        IRoslynWorkspaceService workspace)
+    {
+        _logger = logger;
+        _workspace = workspace;
+    }
+
+    // ── Pattern constants ─────────────────────────────────────────────────────
+
     private static readonly string[] AiDocPhrases =
     {
         "Gets or sets", "Represents a", "Initializes a new instance",
@@ -24,47 +42,79 @@ public class AIDetectionService : IAIDetectionService
         "Returns the", "Determines whether"
     };
 
-    // Over-engineered variable / method naming patterns AI tends to produce
     private static readonly Regex AiNamingPattern = new(
         @"\b(result|response|data|output|returnValue|finalResult|processedData|executionResult)\b",
         RegexOptions.Compiled);
 
-    // AI tends to add redundant null checks like: if (x == null) throw new ArgumentNullException(nameof(x));
-    private static readonly Regex NullGuardPattern = new(
-        @"if\s*\(\s*\w+\s*==\s*null\s*\)\s*(throw|return)",
-        RegexOptions.Compiled | RegexOptions.Multiline);
-
-    // AI tends to comment every brace closing: // end if, // end for
     private static readonly Regex ClosingBraceCommentPattern = new(
         @"}\s*//\s*(end|close|endif|endfor|endwhile|endtry)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public AIDetectionService(ILogger<AIDetectionService> logger)
-    {
-        _logger = logger;
-    }
+    // NEW: detect mixed naming conventions
+    private static readonly Regex PascalCase = new(@"^[A-Z][a-zA-Z0-9]*$", RegexOptions.Compiled);
+    private static readonly Regex CamelCase = new(@"^[a-z][a-zA-Z0-9]*$", RegexOptions.Compiled);
+    private static readonly Regex UnderScore = new(@"^[a-z]+(_[a-z0-9]+)+$", RegexOptions.Compiled);
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public async Task<object> AnalyzeAsync(AnalysisContext ctx, CancellationToken ct)
+        => await RunOnContext(ctx, ctx.Solution.FilePath ?? "solution", ct);
 
     public async Task<AIDetectionResultDto> AnalyzeSolutionAsync(
-        string solutionPath,
+        string solutionPath, CancellationToken cancellationToken = default)
+    {
+        var (ws, sol) = await _workspace.LoadSolutionAsync(solutionPath, cancellationToken);
+        await using var ctx = await AnalysisContext.BuildAsync(
+            sol, ws, _workspace, null, _logger, cancellationToken);
+        return await RunOnContext(ctx, solutionPath, cancellationToken);
+    }
+
+    public async Task<AIDetectionFileResultDto> AnalyzeFileAsync(
+        string filePath, CancellationToken cancellationToken = default)
+    {
+        var code = await File.ReadAllTextAsync(filePath, cancellationToken);
+        return await AnalyzeCodeTextAsync(code, Path.GetFileName(filePath), cancellationToken);
+    }
+
+    public async Task<AIDetectionFileResultDto> AnalyzeCodeTextAsync(
+        string code, string virtualFileName = "input.cs",
         CancellationToken cancellationToken = default)
     {
+        var tree = CSharpSyntaxTree.ParseText(code, path: virtualFileName,
+            cancellationToken: cancellationToken);
+        var root = await tree.GetRootAsync(cancellationToken);
+        return ScoreFile(root, null, code, virtualFileName, virtualFileName);
+    }
+
+    public Task<AIDetectionFileResultDto> AnalyzeCodeAsync(
+        string code, string fileName, CancellationToken ct)
+        => AnalyzeCodeTextAsync(code, fileName, ct);
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private async Task<AIDetectionResultDto> RunOnContext(
+        AnalysisContext ctx, string solutionPath, CancellationToken ct)
+    {
         var result = new AIDetectionResultDto { SolutionPath = solutionPath };
+        var fileBag = new ConcurrentBag<AIDetectionFileResultDto>();
 
         try
         {
-            var (workspace, solution) = await RoslynWorkspaceHelper.LoadSolutionAsync(
-                solutionPath, _logger, cancellationToken);
-
-            using (workspace)
-            {
-                foreach (var doc in RoslynWorkspaceHelper.GetCSharpDocuments(solution))
+            await Parallel.ForEachAsync(ctx.Documents,
+                new ParallelOptions { CancellationToken = ct },
+                (doc, token) =>
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var fileResult = await AnalyzeDocumentAsync(doc, cancellationToken);
-                    result.FileResults.Add(fileResult);
-                }
-            }
+                    var root = ctx.GetRoot(doc);
+                    var model = ctx.GetModel(doc);
+                    if (root is null) return ValueTask.CompletedTask;
 
+                    var text = root.ToFullString();
+                    var fp = ctx.GetFilePath(doc);
+                    fileBag.Add(ScoreFile(root, model, text, fp, doc.Name));
+                    return ValueTask.CompletedTask;
+                });
+
+            result.FileResults.AddRange(fileBag);
             result.FilesAnalyzed = result.FileResults.Count;
             result.FilesWithHighScore = result.FileResults.Count(f => f.AILikelihoodScore >= 0.6);
             result.OverallScore = result.FileResults.Count > 0
@@ -82,174 +132,132 @@ public class AIDetectionService : IAIDetectionService
         return result;
     }
 
-    public async Task<AIDetectionFileResultDto> AnalyzeFileAsync(
-        string filePath,
-        CancellationToken cancellationToken = default)
-    {
-        var code = await File.ReadAllTextAsync(filePath, cancellationToken);
-        return await AnalyzeCodeTextAsync(code, Path.GetFileName(filePath), cancellationToken);
-    }
-
-    public async Task<AIDetectionFileResultDto> AnalyzeCodeTextAsync(
-        string code,
-        string virtualFileName = "input.cs",
-        CancellationToken cancellationToken = default)
-    {
-        var tree = CSharpSyntaxTree.ParseText(code, path: virtualFileName,
-            cancellationToken: cancellationToken);
-        var root = await tree.GetRootAsync(cancellationToken);
-        return ScoreFile(root, code, virtualFileName, virtualFileName);
-    }
-
-    // ── Private Helpers ──────────────────────────────────────────────────────
-
-    private static async Task<AIDetectionFileResultDto> AnalyzeDocumentAsync(
-        Document doc, CancellationToken cancellationToken)
-    {
-        var root = await doc.GetSyntaxRootAsync(cancellationToken);
-        var text = root?.ToFullString() ?? string.Empty;
-        var filePath = doc.FilePath ?? doc.Name;
-        return ScoreFile(root!, text, filePath, doc.Name);
-    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     private static AIDetectionFileResultDto ScoreFile(
-        SyntaxNode root, string code, string filePath, string fileName)
+        SyntaxNode root,
+        SemanticModel? model,
+        string code,
+        string filePath,
+        string fileName)
     {
         var signals = new List<AIDetectionSignalDto>();
         var lines = code.Split('\n');
-        var totalLines = lines.Length;
+        var total = lines.Length;
 
-        if (totalLines < 5)
+        if (total < 5)
             return new AIDetectionFileResultDto
             {
-                FilePath = filePath, FileName = fileName,
-                AILikelihoodScore = 0, Verdict = "Unlikely"
+                FilePath = filePath,
+                FileName = fileName,
+                AILikelihoodScore = 0,
+                Verdict = "Unlikely"
             };
 
-        // ── Signal 1: XML doc comment saturation ──────────────────────────
+        // ── Existing signals ──────────────────────────────────────────────────
+
+        // 1. XML doc density
         var xmlDocLines = lines.Count(l => l.TrimStart().StartsWith("///"));
-        var docRatio = (double)xmlDocLines / totalLines;
+        var docRatio = (double)xmlDocLines / total;
         if (docRatio > 0.25)
-        {
             signals.Add(new AIDetectionSignalDto
             {
                 SignalType = "HighXmlDocDensity",
-                Description = $"XML doc comment density is {docRatio:P0} — AI tools often over-document.",
+                Description = $"XML doc density {docRatio:P0} — AI tools over-document.",
                 Weight = Math.Min(0.3, docRatio),
                 FilePath = filePath
             });
-        }
 
-        // ── Signal 2: AI doc phrases ──────────────────────────────────────
-        var docPhrasesFound = AiDocPhrases.Count(p =>
-            code.Contains(p, StringComparison.OrdinalIgnoreCase));
-        if (docPhrasesFound >= 3)
-        {
+        // 2. AI doc phrases
+        var phraseCount = AiDocPhrases.Count(p => code.Contains(p, StringComparison.OrdinalIgnoreCase));
+        if (phraseCount >= 3)
             signals.Add(new AIDetectionSignalDto
             {
                 SignalType = "AiDocPhrases",
-                Description = $"Found {docPhrasesFound} common AI-generated comment phrases.",
-                Weight = Math.Min(0.25, docPhrasesFound * 0.05),
+                Description = $"{phraseCount} common AI-generated comment phrases found.",
+                Weight = Math.Min(0.25, phraseCount * 0.05),
                 FilePath = filePath,
                 Evidence = string.Join(", ", AiDocPhrases
-                    .Where(p => code.Contains(p, StringComparison.OrdinalIgnoreCase))
-                    .Take(5))
+                    .Where(p => code.Contains(p, StringComparison.OrdinalIgnoreCase)).Take(5))
             });
-        }
 
-        // ── Signal 3: Generic variable naming ────────────────────────────
+        // 3. Generic variable names
+        var methodCount = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Count();
         var namingMatches = AiNamingPattern.Matches(code).Count;
-        var methodCount = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Count() ?? 1;
         var namingRatio = methodCount > 0 ? (double)namingMatches / methodCount : 0;
         if (namingRatio > 1.5)
-        {
             signals.Add(new AIDetectionSignalDto
             {
                 SignalType = "GenericVariableNames",
-                Description = $"High use of generic variable names (result, response, data) — {namingMatches} occurrences across {methodCount} methods.",
+                Description = $"{namingMatches} generic variable names across {methodCount} methods.",
                 Weight = Math.Min(0.2, namingRatio * 0.05),
                 FilePath = filePath
             });
-        }
 
-        // ── Signal 4: Excessive null guard pattern ────────────────────────
-        var nullGuards = NullGuardPattern.Matches(code).Count;
-        if (methodCount > 0 && (double)nullGuards / methodCount > 2.0)
-        {
-            signals.Add(new AIDetectionSignalDto
-            {
-                SignalType = "ExcessiveNullGuards",
-                Description = $"Unusually high density of null-guard patterns ({nullGuards} for {methodCount} methods).",
-                Weight = 0.1,
-                FilePath = filePath
-            });
-        }
-
-        // ── Signal 5: Closing brace comments ─────────────────────────────
+        // 4. Closing brace comments
         var closingComments = ClosingBraceCommentPattern.Matches(code).Count;
         if (closingComments > 0)
-        {
             signals.Add(new AIDetectionSignalDto
             {
                 SignalType = "ClosingBraceComments",
-                Description = $"Found {closingComments} closing-brace comments (// end if, // end for). Rarely written by humans.",
+                Description = $"{closingComments} closing-brace comments (// end if, // end for). Rarely human-written.",
                 Weight = Math.Min(0.25, closingComments * 0.08),
                 FilePath = filePath
             });
-        }
 
-        // ── Signal 6: Every public member has XML doc ─────────────────────
-        if (root is not null)
-        {
-            var publicMembers = root.DescendantNodes()
-                .OfType<MemberDeclarationSyntax>()
-                .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)))
-                .ToList();
-
-            if (publicMembers.Count >= 3)
-            {
-                var membersWithDoc = publicMembers.Count(m =>
-                    m.GetLeadingTrivia().Any(t =>
-                        t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
-                        t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
-
-                var docCoverage = (double)membersWithDoc / publicMembers.Count;
-                if (docCoverage >= 0.9)
-                {
-                    signals.Add(new AIDetectionSignalDto
-                    {
-                        SignalType = "FullDocCoverage",
-                        Description = $"{docCoverage:P0} of public members are XML-documented. Human code rarely achieves this.",
-                        Weight = Math.Min(0.2, (docCoverage - 0.5) * 0.4),
-                        FilePath = filePath
-                    });
-                }
-            }
-        }
-
-        // ── Signal 7: Consistent formatting uniformity ────────────────────
-        var indentLengths = lines
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .Select(l => l.Length - l.TrimStart().Length)
-            .Where(n => n > 0)
+        // 5. Full public documentation coverage
+        var publicMembers = root.DescendantNodes()
+            .OfType<MemberDeclarationSyntax>()
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)))
             .ToList();
 
-        if (indentLengths.Count > 10)
+        if (publicMembers.Count >= 3)
         {
-            var allDivisibleBy4 = indentLengths.All(n => n % 4 == 0);
-            if (allDivisibleBy4)
-            {
+            var docCoverage = (double)publicMembers.Count(m =>
+                m.GetLeadingTrivia().Any(t =>
+                    t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                    t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)))
+                / publicMembers.Count;
+
+            if (docCoverage >= 0.9)
                 signals.Add(new AIDetectionSignalDto
                 {
-                    SignalType = "PerfectIndentation",
-                    Description = "100% consistent 4-space indentation throughout file. Unusual for large human-written files.",
-                    Weight = 0.05,
+                    SignalType = "FullDocCoverage",
+                    Description = $"{docCoverage:P0} of public members documented. Human code rarely achieves this.",
+                    Weight = Math.Min(0.2, (docCoverage - 0.5) * 0.4),
                     FilePath = filePath
                 });
-            }
         }
 
-        // ── Compute final score ───────────────────────────────────────────
+        // 6. Perfect indentation
+        var indents = lines.Where(l => !string.IsNullOrWhiteSpace(l))
+                           .Select(l => l.Length - l.TrimStart().Length)
+                           .Where(n => n > 0)
+                           .ToList();
+        if (indents.Count > 10 && indents.All(n => n % 4 == 0))
+            signals.Add(new AIDetectionSignalDto
+            {
+                SignalType = "PerfectIndentation",
+                Description = "100% consistent 4-space indentation. Unusual for large human-written files.",
+                Weight = 0.05,
+                FilePath = filePath
+            });
+
+        // ── NEW signals ───────────────────────────────────────────────────────
+
+        // 7. Variable name consistency (same concept, multiple names)
+        CheckVariableConsistency(root, filePath, signals);
+
+        // 8. Boilerplate ratio
+        CheckBoilerplateRatio(root, code, total, filePath, signals);
+
+        // 9. Hallucinated API hints (requires SemanticModel)
+        if (model is not null)
+            CheckHallucinatedApis(root, model, filePath, signals);
+
+        // 10. Inconsistent naming conventions
+        CheckNamingConsistency(root, filePath, signals);
+
         var rawScore = signals.Sum(s => s.Weight);
         var finalScore = Math.Clamp(rawScore, 0.0, 1.0);
 
@@ -263,6 +271,141 @@ public class AIDetectionService : IAIDetectionService
         };
     }
 
+    // ── NEW: Variable consistency ─────────────────────────────────────────────
+    // AI tends to use "result" in one method and "response" in another for the
+    // same pattern. This checks for high variance of result-synonym names.
+
+    private static readonly string[][] ResultSynonyms =
+    {
+        new[] { "result", "response", "output", "returnValue", "ret" },
+        new[] { "data", "payload", "content", "body" },
+        new[] { "items", "list", "collection", "records", "entities" },
+    };
+
+    private static void CheckVariableConsistency(
+        SyntaxNode root, string filePath, List<AIDetectionSignalDto> signals)
+    {
+        foreach (var synonymGroup in ResultSynonyms)
+        {
+            var found = root.DescendantNodes()
+                .OfType<VariableDeclaratorSyntax>()
+                .Select(v => v.Identifier.Text.ToLowerInvariant())
+                .Where(n => synonymGroup.Contains(n))
+                .Distinct()
+                .ToList();
+
+            if (found.Count >= 3)
+            {
+                signals.Add(new AIDetectionSignalDto
+                {
+                    SignalType = "VariableNameInconsistency",
+                    Description = $"Multiple synonymous variable names used: [{string.Join(", ", found)}]. AI models often pick inconsistently.",
+                    Weight = 0.1,
+                    FilePath = filePath,
+                    Evidence = string.Join(", ", found)
+                });
+                break;
+            }
+        }
+    }
+
+    // ── NEW: Boilerplate ratio ────────────────────────────────────────────────
+    // AI-generated code has very high boilerplate (auto-properties, null-guards,
+    // trivial constructors). Ratio > 60% of all members is unusual.
+
+    private static void CheckBoilerplateRatio(
+        SyntaxNode root, string code, int totalLines,
+        string filePath, List<AIDetectionSignalDto> signals)
+    {
+        var allMembers = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Count();
+        if (allMembers == 0) return;
+
+        // Auto properties = { get; set; } / { get; }
+        var autoProps = root.DescendantNodes()
+            .OfType<PropertyDeclarationSyntax>()
+            .Count(p => p.AccessorList?.Accessors.All(
+                a => a.Body is null && a.ExpressionBody is null) == true);
+
+        // Trivial constructors (≤ 3 statements)
+        var trivialCtors = root.DescendantNodes()
+            .OfType<ConstructorDeclarationSyntax>()
+            .Count(c => (c.Body?.Statements.Count ?? 0) <= 3);
+
+        var boilerplateCount = autoProps + trivialCtors;
+        var ratio = (double)boilerplateCount / allMembers;
+
+        if (ratio > 0.60 && allMembers > 5)
+            signals.Add(new AIDetectionSignalDto
+            {
+                SignalType = "HighBoilerplateRatio",
+                Description = $"{ratio:P0} of members are boilerplate (auto-props/trivial ctors). AI code often scaffolds excessively.",
+                Weight = Math.Min(0.15, (ratio - 0.5) * 0.3),
+                FilePath = filePath
+            });
+    }
+
+    // ── NEW: Hallucinated API hints ───────────────────────────────────────────
+    // Checks for member accesses where the semantic model reports an error
+    // (candidate symbols empty = method/property does not exist on the type).
+
+    private static void CheckHallucinatedApis(
+        SyntaxNode root, SemanticModel model,
+        string filePath, List<AIDetectionSignalDto> signals)
+    {
+        var hallucinationCount = 0;
+
+        foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        {
+            var sym = model.GetSymbolInfo(ma);
+            if (sym.Symbol is not null) continue;
+            if (sym.CandidateSymbols.Length > 0) continue;
+
+            // No symbol AND no candidates → the member may not exist
+            // (could also be an unresolved reference due to missing deps — be conservative)
+            var diags = model.GetDiagnostics(ma.Span);
+            if (diags.Any(d => d.Id is "CS1061" or "CS0117" or "CS0122"))
+                hallucinationCount++;
+        }
+
+        if (hallucinationCount > 0)
+            signals.Add(new AIDetectionSignalDto
+            {
+                SignalType = "PossibleHallucinatedApi",
+                Description = $"{hallucinationCount} member access(es) reference non-existent members. Could indicate AI hallucination.",
+                Weight = Math.Min(0.3, hallucinationCount * 0.08),
+                FilePath = filePath
+            });
+    }
+
+    // ── NEW: Naming convention consistency ───────────────────────────────────
+    // Detects when the same file mixes camelCase, PascalCase, and underscore_style
+    // for local variables (human code usually stays consistent within a codebase).
+
+    private static void CheckNamingConsistency(
+        SyntaxNode root, string filePath, List<AIDetectionSignalDto> signals)
+    {
+        var localNames = root.DescendantNodes()
+            .OfType<VariableDeclaratorSyntax>()
+            .Select(v => v.Identifier.Text)
+            .Where(n => n.Length >= 3)
+            .ToList();
+
+        if (localNames.Count < 5) return;
+
+        int camel = localNames.Count(n => CamelCase.IsMatch(n));
+        int under = localNames.Count(n => UnderScore.IsMatch(n));
+
+        // Both styles present at significant levels → inconsistent
+        if (camel > 2 && under > 2)
+            signals.Add(new AIDetectionSignalDto
+            {
+                SignalType = "InconsistentNamingConvention",
+                Description = $"Mixed naming: {camel} camelCase + {under} underscore_style variables. AI models sometimes mix styles.",
+                Weight = 0.08,
+                FilePath = filePath
+            });
+    }
+
     private static string ScoreToVerdict(double score) => score switch
     {
         < 0.2 => "Unlikely",
@@ -270,9 +413,4 @@ public class AIDetectionService : IAIDetectionService
         < 0.65 => "Probable",
         _ => "Likely"
     };
-
-    public Task<AIDetectionFileResultDto> AnalyzeCodeAsync(string code, string fileName, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
 }

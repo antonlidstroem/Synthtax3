@@ -11,4 +11,9 @@ public partial class MetricsView : UserControl
         InitializeComponent();
         DataContext = services.GetRequiredService<MetricsViewModel>();
     }
+
+    private void Button_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+
+    }
 }

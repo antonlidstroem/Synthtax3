@@ -6,9 +6,9 @@ using Synthtax.WPF.Services;
 
 namespace Synthtax.WPF.ViewModels;
 
-public partial class AIDetectionViewModel : ViewModelBase
+public partial class AIDetectionViewModel : AnalysisViewModelBase
 {
-    private string _solutionPath    = string.Empty;
+
     private string _searchText      = string.Empty;
     private bool   _hasData;
     private bool   _showAll         = true;
@@ -20,7 +20,7 @@ public partial class AIDetectionViewModel : ViewModelBase
     private string _overallVerdict = string.Empty;
     private int    _filesAnalyzed, _filesHighScore;
 
-    public string SolutionPath { get => _solutionPath; set => SetProperty(ref _solutionPath, value); }
+  
     public bool   HasData      { get => _hasData;       private set => SetProperty(ref _hasData, value); }
 
     public string SearchText
@@ -55,17 +55,7 @@ public partial class AIDetectionViewModel : ViewModelBase
     public AIDetectionViewModel(ApiClient api, TokenStore tokenStore)
         : base(api, tokenStore) { }
 
-    [RelayCommand]
-    private void Browse()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title  = "Välj .sln-fil",
-            Filter = "Solution files (*.sln)|*.sln"
-        };
-        if (dlg.ShowDialog() == true)
-            SolutionPath = dlg.FileName;
-    }
+
 
     [RelayCommand]
     private async Task AnalyzeAsync(CancellationToken ct)

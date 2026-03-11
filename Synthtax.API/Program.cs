@@ -8,50 +8,56 @@ using Synthtax.Infrastructure.Data;
 using Synthtax.Infrastructure.Entities;
 using Synthtax.Infrastructure.Repositories;
 
-// ── MSBuild Locator (must be called before any Roslyn workspace usage) ────────
-// Register the default MSBuild instance so MSBuildWorkspace can load solutions.
 if (!MSBuildLocator.IsRegistered)
     MSBuildLocator.RegisterDefaults();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Services ──────────────────────────────────────────────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApiServices(builder.Configuration);
-builder.Services.AddAnalysisServices(); // Roslyn + analysis engine
 
-// UserRepository is Infrastructure-specific, register here
-//builder.Services.AddScoped<UserRepository>();
-
-
+// ─────────────────────────────────────────────────────────────────────────────
+// CRITICAL ORDER: AddIdentity MUST be registered BEFORE AddApiServices.
+//
+// AddIdentity() internally calls AddAuthentication() and sets:
+//   DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme  (cookie)
+//   DefaultChallengeScheme    = IdentityConstants.ApplicationScheme  (cookie)
+//
+// AddApiServices() then calls AddAuthentication() again, which OVERRIDES
+// those defaults with JwtBearerDefaults.AuthenticationScheme.
+//
+// If the order is reversed (Identity after JWT), Identity silently resets
+// the defaults back to cookies — every API call returns 401 even with a
+// valid Bearer token, because ASP.NET Core tries to authenticate via
+// cookie instead of JWT. This was exactly the Swagger/401 bug.
+// ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    // Lösenordspolicy
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
     options.Password.RequiredLength = 8;
 
-    // Låsningspolicy
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
 
-    // Användarpolicy
     options.User.RequireUniqueEmail = true;
     options.SignIn.RequireConfirmedEmail = false;
 })
-        .AddEntityFrameworkStores<SynthtaxDbContext>()
-        .AddDefaultTokenProviders();
+.AddEntityFrameworkStores<SynthtaxDbContext>()
+.AddDefaultTokenProviders();
 
-// ── Build App ─────────────────────────────────────────────────────────────────
+// JWT auth + CORS + Swagger — registered AFTER Identity so JWT wins as
+// the default authentication/challenge scheme.
+builder.Services.AddApiServices(builder.Configuration);
+
+builder.Services.AddAnalysisServices(); // Roslyn + analysis engine
+
 var app = builder.Build();
 
-// ── Seed Database ─────────────────────────────────────────────────────────────
 await DbSeeder.SeedAsync(app.Services);
 
-// ── Middleware Pipeline ───────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -68,26 +74,17 @@ else
     app.UseHsts();
 }
 
-//app.UseHttpsRedirection();
-//app.UseCors("SynthtaxPolicy");
-
-// Bara HTTPS-omdirigering i produktion, inte i utveckling
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
 
 app.UseCors("SynthtaxPolicy");
-
-// Audit logging middleware – körs innan auth för att fånga misslyckade försök
 app.UseAuditLogging();
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
-// Health check endpoint
 app.MapGet("/health", () => Results.Ok(new
 {
     Status = "Healthy",
